@@ -1,0 +1,6 @@
+vpr ./arch/k6_frac_N10_40nm.xml /home/syh/project/OpenFPGA/openfpga_flow/benchmarks/mcnc_big20/s298/s298.blif  --clock_modeling route
+read_openfpga_arch -f ./arch/k6_frac_N10_40nm_openfpga.xml
+read_openfpga_simulation_setting -f ../openfpga_flow/openfpga_simulation_settings/auto_sim_openfpga.xml
+link_openfpga_arch --activity_file ./test_blif/and.act --sort_gsb_chan_node_in_edges
+link_openfpga_arch --activity_file ./test_blif/and.act --sort_gsb_chan_node_in_edges
+
