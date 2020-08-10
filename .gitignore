@@ -1,6 +1,9 @@
 # editor backup files
 *~
 
+#self added files
+input_command.txt
+
 # temp files
 .DS_Store
 
@@ -47,3 +50,6 @@ build/
 
 message.txt
 deploy_key
+vpr/vpr
+vpr/vpr
+openfpga/input_command.txt

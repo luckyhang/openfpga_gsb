@@ -6,7 +6,7 @@
 # Author        : Ganesh Gore
 # Email         : ganesh.gore@utah.edu
 # = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-#hello
+
 import os
 import sys
 import shutil
