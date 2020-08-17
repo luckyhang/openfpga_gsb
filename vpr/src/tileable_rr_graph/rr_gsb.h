@@ -52,8 +52,10 @@ namespace openfpga {
  *******************************************************************/
 class RRGSB {
   public: /* Contructors */
+    /* shen: enable_gsb_routing */
     RRGSB(const RRGSB&);/* Copy constructor */
-    RRGSB();/* Default constructor */
+    RRGSB(bool enable_gsb_routing): enable_gsb_routing_(enable_gsb_routing) {};
+    //RRGSB();/* Default constructor */
   public: /* Accessors */
     /* Get the number of sides of this SB */
     size_t get_num_sides() const; 
@@ -207,6 +209,7 @@ class RRGSB {
     void add_opin_node(const RRNodeId& node,
                        const e_side& node_side);
 
+
     /* Sort all the incoming edges for routing channel rr_node */
     void sort_chan_node_in_edges(const RRGraph& rr_graph);
 
@@ -253,6 +256,8 @@ class RRGSB {
     bool validate_ipin_node_id(const e_side& side, const size_t& node_id) const;
     bool validate_cb_type(const t_rr_type& cb_type) const;
   private: /* Internal Data */
+    /* whether to construct gsb architecture */
+    bool enable_gsb_routing_;
     /* Coordinator */
     vtr::Point<size_t> coordinate_;
 
@@ -283,6 +288,7 @@ class RRGSB {
 
     /* Logic Block Outputs data */
     std::vector<std::vector<RRNodeId>>  opin_node_;
+
 };
 
 } /* End namespace openfpga*/

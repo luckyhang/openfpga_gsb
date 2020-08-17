@@ -16,6 +16,11 @@
 
 #include "annotate_rr_graph.h"
 
+/* shen: define imux|omux|gsb name, ask qian*/
+#define IMUX "imux"
+#define OMUX "omux"
+#define GSB "gsb"
+
 /* begin namespace openfpga */
 namespace openfpga {
 
@@ -25,7 +30,8 @@ constexpr char* VPR_DELAYLESS_SWITCH_NAME = "__vpr_delayless_switch__";
 static 
 RRChan build_one_rr_chan(const DeviceContext& vpr_device_ctx,
                          const t_rr_type& chan_type, 
-                         vtr::Point<size_t>& chan_coord) {
+                         vtr::Point<size_t>& chan_coord,
+                         bool enable_gsb_routing = false) {
   std::vector<RRNodeId> chan_rr_nodes;
 
   /* Create a rr_chan object and check if it is unique in the graph */
@@ -38,10 +44,24 @@ RRChan build_one_rr_chan(const DeviceContext& vpr_device_ctx,
                                            chan_coord.x(), chan_coord.y(),
                                            chan_type);
   /* Fill the rr_chan */  
-  for (const RRNodeId& chan_rr_node : chan_rr_nodes) {
-    rr_chan.add_node(vpr_device_ctx.rr_graph, chan_rr_node, 
+  /* shen: when enable_gsb_routing is true, we need to ignore imux/omux/gsb node to build the top side and right side of gsb due to gsb architecture */
+  if (enable_gsb_routing == false) {
+    for (const RRNodeId& chan_rr_node : chan_rr_nodes) {
+      rr_chan.add_node(vpr_device_ctx.rr_graph, chan_rr_node, 
                      vpr_device_ctx.rr_graph.node_segment(chan_rr_node));
+    }
+  } else {/* ignore imux/omux/gsb node */
+    for (const RRNodeId& chan_rr_node : chan_rr_nodes) {
+      RRSegmentId rr_segment_id = vpr_device_ctx.rr_graph.node_segment(chan_rr_node);
+      std::string rr_segment_name = vpr_device_ctx.rr_graph.get_segment(rr_segment_id).name;
+      if (rr_segment_name != IMUX && rr_segment_name != OMUX && rr_segment_name != GSB) {
+        /* shen:  distinguish segment, IMUX, OMUX, and GSB node*/
+        rr_chan.add_node(vpr_device_ctx.rr_graph, chan_rr_node, 
+                     vpr_device_ctx.rr_graph.node_segment(chan_rr_node));
+      }
+    }
   }
+  
 
   return rr_chan;
 }
@@ -100,9 +120,10 @@ RRChan build_one_rr_chan(const DeviceContext& vpr_device_ctx,
 static 
 RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx, 
                    const vtr::Point<size_t>& gsb_range,
-                   const vtr::Point<size_t>& gsb_coord) {
+                   const vtr::Point<size_t>& gsb_coord,
+                   const bool& enable_gsb_routing) {
   /* Create an object to return */
-  RRGSB rr_gsb;
+  RRGSB rr_gsb(enable_gsb_routing);
 
   VTR_ASSERT(gsb_coord.x() <= gsb_range.x()); 
   VTR_ASSERT(gsb_coord.y() <= gsb_range.y()); 
@@ -113,288 +134,529 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
   /* Basic information*/
   rr_gsb.init_num_sides(4); /* Fixed number of sides */
 
-  /* Find all rr_nodes of channels */
-  /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-  for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side) {
-    /* Local variables inside this for loop */
-    SideManager side_manager(side);
-    vtr::Point<size_t> coordinate = rr_gsb.get_side_block_coordinate(side_manager.get_side());
-    RRChan rr_chan;
-    std::vector<std::vector<RRNodeId>> temp_opin_rr_nodes(2);
-    enum e_side opin_grid_side[2] = {NUM_SIDES, NUM_SIDES};
-    enum PORTS chan_dir_to_port_dir_mapping[2] = {OUT_PORT, IN_PORT}; /* 0: INC_DIRECTION => ?; 1: DEC_DIRECTION => ? */
+  if (true == enable_gsb_routing) {
+    /* variables to store nodes index */
+    enum e_side four_sides;
+    enum PORTS  chan_dir_to_port_dir_mapping[2] = {OUT_PORT, IN_PORT};/* 0: INC_DIRECTION; 1: DEC_DIRECRION */
 
-    switch (side) {
-    case TOP: /* TOP = 0 */
-      /* For the border, we should take special care */
-      if (gsb_coord.y() == gsb_range.y()) {
-        rr_gsb.clear_one_side(side_manager.get_side());
-        break;
+    /* find all rr_nodes of chanenls */
+    /* Side: Top => 0,Right => 1,Bottom => 2,Left => 3 */
+    /* OMUX is treated as CHANY rr_node, and IMUX is treated as CHANX rr_node;
+    * OMUX can connect to real CHANX/CHANY rr_node and IMUX, and IMUX can connect to IPIN and IMUX itself, while OPIN can also directly connect to IMUX */
+    for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side){
+      /* Local variables inside this for loop */
+      SideManager side_manager(side);
+      vtr::Point<size_t> coordinate = rr_gsb.get_side_block_coordinate(side_manager.get_side());
+      RRChan rr_chan;
+
+      /* variables to store nodes index */
+      std::vector<RRNodeId> temp_opin_rr_nodes[2];
+      std::vector<RRNodeId> temp_ipin_rr_nodes[2];
+      enum PORTS  chan_dir_to_port_dir_mapping[2] = {OUT_PORT, IN_PORT};/* 0: INC_DIRECTION; 1: DEC_DIRECRION */
+      enum e_side opin_grid_side[2] = {NUM_SIDES, NUM_SIDES};
+      enum e_side ipin_grid_side[2] = {NUM_SIDES, NUM_SIDES};
+
+      switch (side) {
+        case TOP:/* on TOP we need to build OMUX */
+          /* todo: for the border, we should take special care */
+
+          /* routing channels */
+          /* todo: build_one_rr_chan need to be modified to consider OMUX node of CHANY, ask qian */
+          rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate, enable_gsb_routing);
+          chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
+          chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
+          break;
+      
+        case RIGHT:
+          /* todo: for the border, we should take special care */
+
+          /* routing channels */
+          /* we assume that rr_node of CHANX/CHANY type on the right side of gsb are only segments, not newly-added IMUX/OMUX*/
+          rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate, enable_gsb_routing);
+          chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
+          chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
+          break;
+
+        case BOTTOM:
+          /* todo: for the border, we should take special care */
+
+          /* routing channels */
+          /* we assume that rr_node of CHANX/CHANY type on the right side of gsb are only segments, not newly-added IMUX/OMUX*/
+          rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate);
+          chan_dir_to_port_dir_mapping[0] = IN_PORT; /* INC_DIRECTION => OUT_PORT */
+          chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => IN_PORT */
+
+          /* Build the GSB: opin and opin_grid_side */
+          /* Grid[x][y] RIGHT side outputs pins */
+          opin_grid_side[0] = RIGHT;
+          /* Grid[x][y] BOTTOM side outputs pins */
+          opin_grid_side[1] = BOTTOM;
+          /* include Grid[x][y+1] Bottom side outputs pins */
+          temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[0]);
+          /* include Grid[x][y] Top side output pins */
+          temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
+
+          /* Build the GSB: ipin and ipin_grid_side */
+          /* Grid[x][y] RIGHT side inputs pins */
+          opin_grid_side[0] = RIGHT;
+          /* Grid[x][y] BOTTOM side inputs pins */
+          opin_grid_side[1] = BOTTOM;
+          /* include Grid[x][y+1] Bottom side outputs pins */
+          temp_ipin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[0]);
+          /* include Grid[x][y] Top side output pins */
+          temp_ipin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[1]);
+
+          break;
+        
+        case LEFT:
+          /* todo: for the border, we should take special care */
+
+          /* routing channels */
+          /* we assume that rr_node of CHANX/CHANY type on the right side of gsb are only segments, not newly-added IMUX/OMUX*/
+          rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate);
+          chan_dir_to_port_dir_mapping[0] = IN_PORT; /* INC_DIRECTION => OUT_PORT */
+          chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => IN_PORT */
+
+          /* Build the Switch block: opin and opin_grid_side */
+          /* Grid[x][y] TOP side outputs pins */
+          opin_grid_side[0] = TOP;
+          /* Grid[x][y] LEFT side outputs pins */
+          opin_grid_side[1] = LEFT;
+          /* include Grid[x][y+] Bottom side outputs pins */
+          temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[0]);
+          /* include Grid[x][y] Top side output pins */
+          temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
+
+          /* Build the GSB: ipin and ipin_grid_side */
+          /* Grid[x][y] TOP side inputs pins */
+          opin_grid_side[0] = TOP;
+          /* Grid[x][y] LEFT side inputs pins */
+          opin_grid_side[1] = LEFT;
+          /* include Grid[x][y+1] Bottom side outputs pins */
+          temp_ipin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[0]);
+          /* include Grid[x][y] Top side output pins */
+          temp_ipin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[1]);
+
+          break;
+
+        default:
+          VTR_LOG_ERROR("invalied side index!\n");
+          exit(1);
       }
-      /* Routing channels*/
-      /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-      /* Create a rr_chan object and check if it is unique in the graph */
-      rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate);
-      chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
-      chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
 
-      /* Build the Switch block: opin and opin_grid_side */
-      /* Assign grid side of OPIN */
-      /* Grid[x][y+1] RIGHT side outputs pins */
-      opin_grid_side[0] = RIGHT;
-      /* Grid[x+1][y+1] left side outputs pins */
-      opin_grid_side[1] = LEFT; 
-      /* Include Grid[x][y+1] RIGHT side outputs pins */
-      temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x(), gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
-      /* Include Grid[x+1][y+1] Left side output pins */
-      temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x() + 1, gsb_coord.y() + 1, OPIN, opin_grid_side[1]);
-
-      break;
-    case RIGHT: /* RIGHT = 1 */
-      /* For the border, we should take special care */
-      if (gsb_coord.x() == gsb_range.x()) {
-        rr_gsb.clear_one_side(side_manager.get_side());
-        break;
-      }
-      /* Routing channels*/
-      /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-      /* Collect rr_nodes for Tracks for top: chany[x][y+1] */
-      /* Create a rr_chan object and check if it is unique in the graph */
-      rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate);
-      chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
-      chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
-
-      /* Build the Switch block: opin and opin_grid_side */
-      /* Assign grid side of OPIN */
-      /* Grid[x+1][y+1] BOTTOM side outputs pins */
-      opin_grid_side[0] = BOTTOM;
-      /* Grid[x+1][y] TOP side outputs pins */
-      opin_grid_side[1] = TOP;
-
-      /* include Grid[x+1][y+1] Bottom side output pins */
-      temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x() + 1, gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
-      /* include Grid[x+1][y] Top side output pins */
-      temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x() + 1, gsb_coord.y(), OPIN, opin_grid_side[1]);
-      break;
-    case BOTTOM: /* BOTTOM = 2*/
-      /* For the border, we should take special care */
-      if (gsb_coord.y() == 0) {
-        rr_gsb.clear_one_side(side_manager.get_side());
-        break;
-      }
-      /* Routing channels*/
-      /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-      /* Collect rr_nodes for Tracks for bottom: chany[x][y] */
-      /* Create a rr_chan object and check if it is unique in the graph */
-      rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate);
-      chan_dir_to_port_dir_mapping[0] =  IN_PORT; /* INC_DIRECTION => IN_PORT */
-      chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => OUT_PORT */
-
-      /* Build the Switch block: opin and opin_grid_side */
-      /* Assign grid side of OPIN */
-      /* Grid[x+1][y] LEFT side outputs pins */
-      opin_grid_side[0] = LEFT;
-      /* Grid[x][y] RIGHT side outputs pins */
-      opin_grid_side[1] = RIGHT;
-      /* include Grid[x+1][y] Left side output pins */
-      temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x() + 1, gsb_coord.y(), OPIN, opin_grid_side[0]);
-      /* include Grid[x][y] Right side output pins */
-      temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
-      break;
-    case LEFT: /* LEFT = 3 */
-      /* For the border, we should take special care */
-      if (gsb_coord.x() == 0) {
-        rr_gsb.clear_one_side(side_manager.get_side());
-        break;
-      }
-      /* Routing channels*/
-      /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-      /* Collect rr_nodes for Tracks for left: chanx[x][y] */
-      /* Create a rr_chan object and check if it is unique in the graph */
-      rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate);
-      chan_dir_to_port_dir_mapping[0] =  IN_PORT; /* INC_DIRECTION => IN_PORT */
-      chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => OUT_PORT */
-
-      /* Build the Switch block: opin and opin_grid_side */
-      /* Grid[x][y+1] BOTTOM side outputs pins */
-      opin_grid_side[0] = BOTTOM;
-      /* Grid[x][y] TOP side outputs pins */
-      opin_grid_side[1] = TOP;
-      /* include Grid[x][y+1] Bottom side outputs pins */
-      temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x(), gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
-      /* include Grid[x][y] Top side output pins */
-      temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                       gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
-      break;
-    default:
-      VTR_LOG_ERROR("Invalid side index!\n");
-      exit(1);
-    }
-
-    /* Organize a vector of port direction */
-    if (0 < rr_chan.get_chan_width()) {
-      std::vector<enum PORTS> rr_chan_dir;
-      rr_chan_dir.resize(rr_chan.get_chan_width());
-      for (size_t itrack = 0; itrack < rr_chan.get_chan_width(); ++itrack) {
-        /* Identify the directionality, record it in rr_node_direction */
-        if (INC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack))) {
-          rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[0];
-        } else {
-          VTR_ASSERT(DEC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack)));
-          rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[1];
+      /* Organize a vector of port direction */
+      if (0 < rr_chan.get_chan_width()) {
+        std::vector<enum PORTS> rr_chan_dir;
+        rr_chan_dir.resize(rr_chan.get_chan_width());
+        for (size_t itrack = 0; itrack < rr_chan.get_chan_width(); ++itrack) {
+          /* Identify the directionality, record it in rr_node_direction */
+          if (INC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack))) {
+            rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[0];
+          } else {
+            VTR_ASSERT(DEC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack)));
+            rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[1];
+          }
         }
+        /* Fill chan_rr_nodes */
+        rr_gsb.add_chan_node(side_manager.get_side(), rr_chan, rr_chan_dir);/* shen: top side and right side do not have imux|omux|gsb nodes */
       }
-      /* Fill chan_rr_nodes */
-      rr_gsb.add_chan_node(side_manager.get_side(), rr_chan, rr_chan_dir);
+
+      /* Fill opin_rr_nodes */
+      /* Copy from temp_opin_rr_node to opin_rr_node */
+
+      for (const RRNodeId& inode : temp_opin_rr_nodes[0]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x][y] Bottom side outputs pins */
+        rr_gsb.add_opin_node(inode, side_manager.get_side());
+      }
+
+      /* Fill opin_rr_nodes */
+      /* Copy from temp_opin_rr_node to opin_rr_node */
+
+      for (const RRNodeId& inode : temp_opin_rr_nodes[1]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x][y] Bottom side outputs pins */
+        rr_gsb.add_opin_node(inode, side_manager.get_side());
+      }
+
+      /* Fill ipin_rr_nodes */
+      /* Copy from temp_ipin_rr_node to ipin_rr_node */
+
+      for (const RRNodeId& inode : temp_ipin_rr_nodes[0]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_ipin_direct_connected_opin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x][y] Bottom side outputs pins */
+        rr_gsb.add_ipin_node(inode, side_manager.get_side());
+      }
+
+      for (const RRNodeId& inode : temp_ipin_rr_nodes[1]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_ipin_direct_connected_opin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x][y] Bottom side outputs pins */
+        rr_gsb.add_ipin_node(inode, side_manager.get_side());
+      }
+
+      /* Clear the temp data */
+      temp_opin_rr_nodes[0].clear();
+      temp_opin_rr_nodes[1].clear();
+      temp_ipin_rr_nodes[0].clear();
+      temp_ipin_rr_nodes[1].clear();
+      opin_grid_side[0] = NUM_SIDES;
+      opin_grid_side[1] = NUM_SIDES;
+
     }
 
-    /* Fill opin_rr_nodes */
-    /* Copy from temp_opin_rr_node to opin_rr_node */
-    for (const RRNodeId& inode : temp_opin_rr_nodes[0]) {
-      /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
-       * This is for those grid output pins used by direct connections
-       */
-      if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
-                             vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
-        continue;
+    return rr_gsb;
+
+  /* orginal code */
+  }else{
+    /* Find all rr_nodes of channels */
+    /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+    for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side) {
+      /* Local variables inside this for loop */
+      SideManager side_manager(side);
+      vtr::Point<size_t> coordinate = rr_gsb.get_side_block_coordinate(side_manager.get_side());
+      RRChan rr_chan;
+
+      //traditional SB-CB routing architecture, opins come from both sides CLB of routing channel
+      std::vector<std::vector<RRNodeId>> temp_opin_rr_nodes(2);
+      enum e_side opin_grid_side[2] = {NUM_SIDES, NUM_SIDES};
+      enum PORTS chan_dir_to_port_dir_mapping[2] = {OUT_PORT, IN_PORT}; /* 0: INC_DIRECTION => ?; 1: DEC_DIRECTION => ? */  
+
+      switch (side) {
+      case TOP: /* TOP = 0 */
+        /* For the border, we should take special care */
+        if (gsb_coord.y() == gsb_range.y()) {
+          rr_gsb.clear_one_side(side_manager.get_side());
+          break;
+        }
+        /* Routing channels*/
+        /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+        /* Create a rr_chan object and check if it is unique in the graph */
+        rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate);
+        chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
+        chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
+
+        /* Build the Switch block: opin and opin_grid_side */
+        /* Assign grid side of OPIN */
+        /* Grid[x][y+1] RIGHT side outputs pins */
+        opin_grid_side[0] = RIGHT;
+        /* Grid[x+1][y+1] left side outputs pins */
+        opin_grid_side[1] = LEFT; 
+        /* Include Grid[x][y+1] RIGHT side outputs pins */
+        temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x(), gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
+        /* Include Grid[x+1][y+1] Left side output pins */
+        temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x() + 1, gsb_coord.y() + 1, OPIN, opin_grid_side[1]);
+
+        break;
+      case RIGHT: /* RIGHT = 1 */
+        /* For the border, we should take special care */
+        if (gsb_coord.x() == gsb_range.x()) {
+          rr_gsb.clear_one_side(side_manager.get_side());
+          break;
+        }
+        /* Routing channels*/
+        /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+        /* Collect rr_nodes for Tracks for top: chany[x][y+1] */
+        /* Create a rr_chan object and check if it is unique in the graph */
+        rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate);
+        chan_dir_to_port_dir_mapping[0] = OUT_PORT; /* INC_DIRECTION => OUT_PORT */
+        chan_dir_to_port_dir_mapping[1] =  IN_PORT; /* DEC_DIRECTION => IN_PORT */
+
+        /* Build the Switch block: opin and opin_grid_side */
+        /* Assign grid side of OPIN */
+        /* Grid[x+1][y+1] BOTTOM side outputs pins */
+        opin_grid_side[0] = BOTTOM;
+        /* Grid[x+1][y] TOP side outputs pins */
+        opin_grid_side[1] = TOP;
+
+        /* include Grid[x+1][y+1] Bottom side output pins */
+        temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x() + 1, gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
+        /* include Grid[x+1][y] Top side output pins */
+        temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x() + 1, gsb_coord.y(), OPIN, opin_grid_side[1]);
+        break;
+      case BOTTOM: /* BOTTOM = 2*/
+        /* For the border, we should take special care */
+        if (gsb_coord.y() == 0) {
+          rr_gsb.clear_one_side(side_manager.get_side());
+          break;
+        }
+        /* Routing channels*/
+        /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+        /* Collect rr_nodes for Tracks for bottom: chany[x][y] */
+        /* Create a rr_chan object and check if it is unique in the graph */
+        rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate);
+        chan_dir_to_port_dir_mapping[0] =  IN_PORT; /* INC_DIRECTION => IN_PORT */
+        chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => OUT_PORT */
+
+        /* Build the Switch block: opin and opin_grid_side */
+        /* Assign grid side of OPIN */
+        /* Grid[x+1][y] LEFT side outputs pins */
+        opin_grid_side[0] = LEFT;
+        /* Grid[x][y] RIGHT side outputs pins */
+        opin_grid_side[1] = RIGHT;
+        /* include Grid[x+1][y] Left side output pins */
+        temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x() + 1, gsb_coord.y(), OPIN, opin_grid_side[0]);
+        /* include Grid[x][y] Right side output pins */
+        temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
+        break;
+      case LEFT: /* LEFT = 3 */
+        /* For the border, we should take special care */
+        if (gsb_coord.x() == 0) {
+          rr_gsb.clear_one_side(side_manager.get_side());
+          break;
+        }
+        /* Routing channels*/
+        /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+        /* Collect rr_nodes for Tracks for left: chanx[x][y] */
+        /* Create a rr_chan object and check if it is unique in the graph */
+        rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate);
+        chan_dir_to_port_dir_mapping[0] =  IN_PORT; /* INC_DIRECTION => IN_PORT */
+        chan_dir_to_port_dir_mapping[1] = OUT_PORT; /* DEC_DIRECTION => OUT_PORT */
+
+        /* Build the Switch block: opin and opin_grid_side */
+        /* Grid[x][y+1] BOTTOM side outputs pins */
+        opin_grid_side[0] = BOTTOM;
+        /* Grid[x][y] TOP side outputs pins */
+        opin_grid_side[1] = TOP;
+        /* include Grid[x][y+1] Bottom side outputs pins */
+        temp_opin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x(), gsb_coord.y() + 1, OPIN, opin_grid_side[0]);
+        /* include Grid[x][y] Top side output pins */
+        temp_opin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                        gsb_coord.x(), gsb_coord.y(), OPIN, opin_grid_side[1]);
+        break;
+      default:
+        VTR_LOG_ERROR("Invalid side index!\n");
+        exit(1);
       }
 
-      /* Do not consider OPINs that directly drive an IPIN
-       * they are supposed to be handled by direct connection
-       */
-      if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
-        continue;
+      /* Organize a vector of port direction */
+      if (0 < rr_chan.get_chan_width()) {
+        std::vector<enum PORTS> rr_chan_dir;
+        rr_chan_dir.resize(rr_chan.get_chan_width());
+        for (size_t itrack = 0; itrack < rr_chan.get_chan_width(); ++itrack) {
+          /* Identify the directionality, record it in rr_node_direction */
+          if (INC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack))) {
+            rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[0];
+          } else {
+            VTR_ASSERT(DEC_DIRECTION == vpr_device_ctx.rr_graph.node_direction(rr_chan.get_node(itrack)));
+            rr_chan_dir[itrack] = chan_dir_to_port_dir_mapping[1];
+          }
+        }
+        /* Fill chan_rr_nodes */
+        rr_gsb.add_chan_node(side_manager.get_side(), rr_chan, rr_chan_dir);
       }
 
-      /* Grid[x+1][y+1] Bottom side outputs pins */
-      rr_gsb.add_opin_node(inode, side_manager.get_side());
+      /* Fill opin_rr_nodes */
+      /* Copy from temp_opin_rr_node to opin_rr_node */
+      for (const RRNodeId& inode : temp_opin_rr_nodes[0]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x+1][y+1] Bottom side outputs pins */
+        rr_gsb.add_opin_node(inode, side_manager.get_side());
+      }
+
+      for (const RRNodeId& inode : temp_opin_rr_nodes[1]) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
+          continue;
+        }
+
+        /* Do not consider OPINs that directly drive an IPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+
+        /* Grid[x+1][y] TOP side outputs pins */
+        rr_gsb.add_opin_node(inode, side_manager.get_side());
+      }
+
+      /* Clean ipin_rr_nodes */
+      /* We do not have any IPIN for a Switch Block */
+      rr_gsb.clear_ipin_nodes(side_manager.get_side());
+
+      /* Clear the temp data */
+      temp_opin_rr_nodes[0].clear();
+      temp_opin_rr_nodes[1].clear();
+      opin_grid_side[0] = NUM_SIDES;
+      opin_grid_side[1] = NUM_SIDES;
     }
 
-    for (const RRNodeId& inode : temp_opin_rr_nodes[1]) {
-      /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
-       * This is for those grid output pins used by direct connections
-       */
-      if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).begin(),
-                             vpr_device_ctx.rr_graph.node_configurable_out_edges(inode).end())) {
-        continue;
-      }
-
-      /* Do not consider OPINs that directly drive an IPIN
-       * they are supposed to be handled by direct connection
-       */
-      if (true == is_opin_direct_connected_ipin(vpr_device_ctx.rr_graph, inode)) { 
-        continue;
-      }
-
-      /* Grid[x+1][y] TOP side outputs pins */
-      rr_gsb.add_opin_node(inode, side_manager.get_side());
-    }
-
-    /* Clean ipin_rr_nodes */
-    /* We do not have any IPIN for a Switch Block */
-    rr_gsb.clear_ipin_nodes(side_manager.get_side());
-
-    /* Clear the temp data */
-    temp_opin_rr_nodes[0].clear();
-    temp_opin_rr_nodes[1].clear();
-    opin_grid_side[0] = NUM_SIDES;
-    opin_grid_side[1] = NUM_SIDES;
-  }
-
-  /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
-  for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side) {
-    /* Local variables inside this for loop */
-    SideManager side_manager(side);
-    size_t ix; 
-    size_t iy; 
-    enum e_side chan_side;
-    std::vector<RRNodeId> temp_ipin_rr_nodes;
-    enum e_side ipin_rr_node_grid_side;
-   
-    switch (side) {
-    case TOP: /* TOP = 0 */
-      /* For the bording, we should take special care */
-      /* Check if left side chan width is 0 or not */
-      chan_side = LEFT;
-      /* Build the connection block: ipin and ipin_grid_side */
-      /* BOTTOM side INPUT Pins of Grid[x][y+1] */
-      ix = rr_gsb.get_sb_x(); 
-      iy = rr_gsb.get_sb_y() + 1; 
-      ipin_rr_node_grid_side = BOTTOM; 
-      break;
-    case RIGHT: /* RIGHT = 1 */
-      /* For the bording, we should take special care */
-      /* Check if TOP side chan width is 0 or not */
-      chan_side = TOP;
-      /* Build the connection block: ipin and ipin_grid_side */
-      /* LEFT side INPUT Pins of Grid[x+1][y+1] */
-      ix = rr_gsb.get_sb_x() + 1; 
-      iy = rr_gsb.get_sb_y() + 1; 
-      ipin_rr_node_grid_side = LEFT; 
-      break;
-    case BOTTOM: /* BOTTOM = 2*/
-      /* For the bording, we should take special care */
-      /* Check if left side chan width is 0 or not */
-      chan_side = LEFT;
-      /* Build the connection block: ipin and ipin_grid_side */
-      /* TOP side INPUT Pins of Grid[x][y] */
-      ix = rr_gsb.get_sb_x(); 
-      iy = rr_gsb.get_sb_y(); 
-      ipin_rr_node_grid_side = TOP; 
-      break;
-    case LEFT: /* LEFT = 3 */
-      /* For the bording, we should take special care */
-      /* Check if left side chan width is 0 or not */
-      chan_side = TOP;
-      /* Build the connection block: ipin and ipin_grid_side */
-      /* RIGHT side INPUT Pins of Grid[x][y+1] */
-      ix = rr_gsb.get_sb_x(); 
-      iy = rr_gsb.get_sb_y() + 1; 
-      ipin_rr_node_grid_side = RIGHT; 
-      break;
-    default:
-      VTR_LOG_ERROR("Invalid side index!\n");
-      exit(1);
-    }
+    /* Side: TOP => 0, RIGHT => 1, BOTTOM => 2, LEFT => 3 */
+    for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side) {
+      /* Local variables inside this for loop */
+      SideManager side_manager(side);
+      size_t ix; 
+      size_t iy; 
+      enum e_side chan_side;
+      std::vector<RRNodeId> temp_ipin_rr_nodes;
+      enum e_side ipin_rr_node_grid_side;
     
-    /* If there is no channel at this side, we skip ipin_node annotation */
-    if (0 == rr_gsb.get_chan_width(chan_side)) {
-      continue;
-    }
-    /* Collect IPIN rr_nodes*/ 
-    temp_ipin_rr_nodes = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                  ix, iy, IPIN, ipin_rr_node_grid_side);
-    /* Fill the ipin nodes of RRGSB */ 
-    for (const RRNodeId& inode : temp_ipin_rr_nodes) {
-      /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
-       * This is for those grid output pins used by direct connections
-       */
-      if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_in_edges(inode).begin(),
-                             vpr_device_ctx.rr_graph.node_configurable_in_edges(inode).end())) {
+      switch (side) {
+      case TOP: /* TOP = 0 */
+        /* For the bording, we should take special care */
+        /* Check if left side chan width is 0 or not */
+        chan_side = LEFT;
+        /* Build the connection block: ipin and ipin_grid_side */
+        /* BOTTOM side INPUT Pins of Grid[x][y+1] */
+        ix = rr_gsb.get_sb_x(); 
+        iy = rr_gsb.get_sb_y() + 1; 
+        ipin_rr_node_grid_side = BOTTOM; 
+        break;
+      case RIGHT: /* RIGHT = 1 */
+        /* For the bording, we should take special care */
+        /* Check if TOP side chan width is 0 or not */
+        chan_side = TOP;
+        /* Build the connection block: ipin and ipin_grid_side */
+        /* LEFT side INPUT Pins of Grid[x+1][y+1] */
+        ix = rr_gsb.get_sb_x() + 1; 
+        iy = rr_gsb.get_sb_y() + 1; 
+        ipin_rr_node_grid_side = LEFT; 
+        break;
+      case BOTTOM: /* BOTTOM = 2*/
+        /* For the bording, we should take special care */
+        /* Check if left side chan width is 0 or not */
+        chan_side = LEFT;
+        /* Build the connection block: ipin and ipin_grid_side */
+        /* TOP side INPUT Pins of Grid[x][y] */
+        ix = rr_gsb.get_sb_x(); 
+        iy = rr_gsb.get_sb_y(); 
+        ipin_rr_node_grid_side = TOP; 
+        break;
+      case LEFT: /* LEFT = 3 */
+        /* For the bording, we should take special care */
+        /* Check if left side chan width is 0 or not */
+        chan_side = TOP;
+        /* Build the connection block: ipin and ipin_grid_side */
+        /* RIGHT side INPUT Pins of Grid[x][y+1] */
+        ix = rr_gsb.get_sb_x(); 
+        iy = rr_gsb.get_sb_y() + 1; 
+        ipin_rr_node_grid_side = RIGHT; 
+        break;
+      default:
+        VTR_LOG_ERROR("Invalid side index!\n");
+        exit(1);
+      }
+      
+      /* If there is no channel at this side, we skip ipin_node annotation */
+      if (0 == rr_gsb.get_chan_width(chan_side)) {
         continue;
       }
+      /* Collect IPIN rr_nodes*/ 
+      temp_ipin_rr_nodes = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
+                                                    ix, iy, IPIN, ipin_rr_node_grid_side);
+      /* Fill the ipin nodes of RRGSB */ 
+      for (const RRNodeId& inode : temp_ipin_rr_nodes) {
+        /* Skip those has no configurable outgoing, they should NOT appear in the GSB connection
+        * This is for those grid output pins used by direct connections
+        */
+        if (0 == std::distance(vpr_device_ctx.rr_graph.node_configurable_in_edges(inode).begin(),
+                              vpr_device_ctx.rr_graph.node_configurable_in_edges(inode).end())) {
+          continue;
+        }
 
-      /* Do not consider IPINs that are directly connected by an OPIN
-       * they are supposed to be handled by direct connection
-       */
-      if (true == is_ipin_direct_connected_opin(vpr_device_ctx.rr_graph, inode)) { 
-        continue;
+        /* Do not consider IPINs that are directly connected by an OPIN
+        * they are supposed to be handled by direct connection
+        */
+        if (true == is_ipin_direct_connected_opin(vpr_device_ctx.rr_graph, inode)) { 
+          continue;
+        }
+  
+        rr_gsb.add_ipin_node(inode, side_manager.get_side());
       }
- 
-      rr_gsb.add_ipin_node(inode, side_manager.get_side());
+      /* Clear the temp data */
+      temp_ipin_rr_nodes.clear();
     }
-    /* Clear the temp data */
-    temp_ipin_rr_nodes.clear();
+
+    return rr_gsb;
   }
-
-  return rr_gsb;
 }
 
 /********************************************************************
@@ -403,7 +665,8 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
  *******************************************************************/
 void annotate_device_rr_gsb(const DeviceContext& vpr_device_ctx, 
                             DeviceRRGSB& device_rr_gsb,
-                            const bool& verbose_output) {
+                            const bool& verbose_output,
+                            const bool& enable_gsb_routing) {
 
   vtr::ScopedStartFinishTimer timer("Build General Switch Block(GSB) annotation on top of routing resource graph");
 
@@ -423,9 +686,9 @@ void annotate_device_rr_gsb(const DeviceContext& vpr_device_ctx,
        * sort drive_rr_nodes should be called if required by users
        */
       const RRGSB& rr_gsb = build_rr_gsb(vpr_device_ctx, 
-                                         vtr::Point<size_t>(vpr_device_ctx.grid.width() - 2, vpr_device_ctx.grid.height() - 2), 
-                                         vtr::Point<size_t>(ix, iy));
- 
+                                         vtr::Point<size_t>(vpr_device_ctx.grid.width() - 2, vpr_device_ctx.grid.height() - 2), /* todo: coordinate may need to be calibrated */
+                                         vtr::Point<size_t>(ix, iy),
+                                         enable_gsb_routing);
       /* Add to device_rr_gsb */
       vtr::Point<size_t> gsb_coordinate = rr_gsb.get_sb_coordinate();
       device_rr_gsb.add_rr_gsb(gsb_coordinate, rr_gsb);

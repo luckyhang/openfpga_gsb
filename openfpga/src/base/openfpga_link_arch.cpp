@@ -67,6 +67,7 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
 
   vtr::ScopedStartFinishTimer timer("Link OpenFPGA architecture to VPR architecture");
 
+  CommandOptionId opt_enable_gsb_routing = cmd.option("enable_gsb_routing");
   CommandOptionId opt_activity_file = cmd.option("activity_file");
   CommandOptionId opt_sort_edge = cmd.option("sort_gsb_chan_node_in_edges");
   CommandOptionId opt_verbose = cmd.option("verbose");
@@ -120,12 +121,13 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
 
   annotate_device_rr_gsb(g_vpr_ctx.device(),
                          openfpga_ctx.mutable_device_rr_gsb(),
-                         cmd_context.option_enable(cmd, opt_verbose));
+                         cmd_context.option_enable(cmd, opt_verbose),
+                         cmd_context.option_enable(cmd, opt_enable_gsb_routing));
 
   if (true == cmd_context.option_enable(cmd, opt_sort_edge)) {
     sort_device_rr_gsb_chan_node_in_edges(g_vpr_ctx.device().rr_graph,
                                           openfpga_ctx.mutable_device_rr_gsb(),
-                                          cmd_context.option_enable(cmd, opt_verbose));
+                                          cmd_context.option_enable(cmd, opt_verbose));/* shen: enable gsb routing */
   } 
 
   /* Build multiplexer library */

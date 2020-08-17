@@ -19,7 +19,7 @@ namespace openfpga {
  * Constructors
  ***********************************************************************/
 /* Constructor for an empty object */
-RRGSB::RRGSB() {
+RRGSB::RRGSB(bool enable_gsb_routing) {
   /* Set a clean start! */
   coordinate_.set(0, 0);
 
@@ -773,8 +773,14 @@ void RRGSB::init_num_sides(const size_t& num_sides) {
   /* Initialize the vectors */
   chan_node_.resize(num_sides);
   chan_node_direction_.resize(num_sides);
-  ipin_node_.resize(num_sides);
-  opin_node_.resize(num_sides);
+  if (true == enable_gsb_routing_) {
+    ipin_node_.resize(2);/* shen: at top side of the clb */
+    opin_node_.resize(2);/* shen: at right side of the clb */
+  }else {
+    ipin_node_.resize(num_sides);
+    opin_node_.resize(num_sides);
+  }
+  
 }
 
 /* Add a node to the chan_node_ list and also assign its direction in chan_node_direction_ */
@@ -785,11 +791,11 @@ void RRGSB::add_chan_node(const e_side& node_side,
   VTR_ASSERT(validate_side(node_side));
 
   /* fill the dedicated element in the vector */
-  chan_node_[size_t(node_side)].set(rr_chan);
-  chan_node_direction_[size_t(node_side)].resize(rr_chan_dir.size());
-  for (size_t inode = 0; inode < rr_chan_dir.size(); ++inode) {
-    chan_node_direction_[size_t(node_side)][inode] = rr_chan_dir[inode];
-  }
+    chan_node_[size_t(node_side)].set(rr_chan);
+    chan_node_direction_[size_t(node_side)].resize(rr_chan_dir.size());
+    for (size_t inode = 0; inode < rr_chan_dir.size(); ++inode) {
+      chan_node_direction_[size_t(node_side)][inode] = rr_chan_dir[inode];
+    } 
 } 
 
 /* Add a node to the chan_node_ list and also assign its direction in chan_node_direction_ */

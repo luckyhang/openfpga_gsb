@@ -124,6 +124,9 @@ ShellCommandId add_openfpga_link_arch_command(openfpga::Shell<OpenfpgaContext>& 
                                               const std::vector<ShellCommandId>& dependent_cmds) {
   Command shell_cmd("link_openfpga_arch");
 
+  /* shen: add an option '--enable_gsb_routing' */
+  shell_cmd.add_option("enable_gsb_routing",false,"apply gsb routing architecture instead of traditional CB-SB routing architecture");
+
   /* Add an option '--activity_file'*/
   CommandOptionId opt_act_file = shell_cmd.add_option("activity_file", true, "file path to the signal activity");
   shell_cmd.set_option_require_value(opt_act_file, openfpga::OPT_STRING);
