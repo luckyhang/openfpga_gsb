@@ -8,6 +8,11 @@
 #include "openfpga_context.h"
 #include "device_rr_gsb.h"
 
+/* shen: imux|omux|gsb node associate segment name, ask qian */
+#define IMUX "imux_medium"
+#define OMUX "omux_medium"
+#define GSB "gsb_medium"
+
 /********************************************************************
  * Function declaration
  *******************************************************************/

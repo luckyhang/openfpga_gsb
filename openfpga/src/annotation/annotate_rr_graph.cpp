@@ -16,11 +16,6 @@
 
 #include "annotate_rr_graph.h"
 
-/* shen: define imux|omux|gsb name, ask qian*/
-#define IMUX "imux"
-#define OMUX "omux"
-#define GSB "gsb"
-
 /* begin namespace openfpga */
 namespace openfpga {
 

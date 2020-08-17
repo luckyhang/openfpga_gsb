@@ -307,7 +307,13 @@ void RRGSB::get_node_side_and_index(const RRGraph& rr_graph,
                                     int& node_index) const {
   size_t side;
   SideManager side_manager;
-  
+  /* shen: to identify imux|omux|gsb node */
+  if (true == enable_gsb_routing_) {
+    RRSegmentId node_seg_id = rr_graph.node_segment(node);
+    std::string node_seg_name = rr_graph.get_segment(node_seg_id).name;
+  }
+  /*  */
+
   /* Count the number of existence of cur_rr_node in cur_sb_info
    * It could happen that same cur_rr_node appears on different sides of a SB
    * For example, a routing track go vertically across the SB.
@@ -317,7 +323,17 @@ void RRGSB::get_node_side_and_index(const RRGraph& rr_graph,
    */
   for (side = 0; side < get_num_sides(); ++side) {
     side_manager.set_side(side);
-    node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction);
+    /* shen: when enable gsb routing, imux|omux|gsb maybe OUT_PORTS */
+    if (false == enable_gsb_routing_) {
+      node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction);
+    } else {
+      VTR_ASSERT(IN_PORT == node_direction || OUT_PORT == node_direction);
+      const PORTS node_direction_opposite = (node_direction == IN_PORT) ? OUT_PORT : IN_PORT;
+      node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction);
+      /* shen: node_direction not found, try node_direction_opposite, because imux|omux|gsb can only be IN_PORT or OUT_PORT */
+      if (-1 == node_index) node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction_opposite);
+    }
+    
     if (-1 != node_index) {
       break;
     }
@@ -817,6 +833,7 @@ void RRGSB::sort_chan_node_in_edges(const RRGraph& rr_graph,
                                     const size_t& track_id) {
   std::map<size_t, std::map<size_t, RREdgeId>> from_grid_edge_map;
   std::map<size_t, std::map<size_t, RREdgeId>> from_track_edge_map;
+  std::map<size_t, std::map<size_t, RREdgeId>> from_gsb_edge_map;
 
   const RRNodeId& chan_node = chan_node_[size_t(chan_side)].get_node(track_id); 
   
@@ -834,6 +851,7 @@ void RRGSB::sort_chan_node_in_edges(const RRGraph& rr_graph,
    */
   for (const RREdgeId& edge : rr_graph.node_in_edges(chan_node)) {
     /* We care the source node of this edge, and it should be an input of the GSB!!! */
+    /* shen: when enable gsb routing, source node of this edge may be imux|omux|gsb, whose direction is random, we should take care of them */
     const RRNodeId& src_node = rr_graph.edge_src_node(edge);
     e_side side = NUM_SIDES;
     int index = 0;
@@ -893,10 +911,19 @@ void RRGSB::sort_chan_node_in_edges(const RRGraph& rr_graph) {
     chan_node_in_edges_[side].resize(chan_node_[side].get_chan_width());
     for (size_t track_id = 0; track_id < chan_node_[side].get_chan_width(); ++track_id) {
       /* Only sort the output nodes and bypass passing wires */
-      if ( (OUT_PORT == chan_node_direction_[side][track_id])
+      if (enable_gsb_routing_) {
+        if ( (OUT_PORT == chan_node_direction_[side][track_id])
         && (false == is_sb_node_passing_wire(rr_graph, side_manager.get_side(), track_id)) ) {  
         sort_chan_node_in_edges(rr_graph, side_manager.get_side(), track_id); 
+        }
+      } else {
+        /* shen: imux|omux|gsb maybe IN_PORTS, but we have to consider them*/
+        std::string node_seg_name = rr_graph.get_segment(get_chan_node_segment((e_side&)side, track_id)).name;
+        if ((OUT_PORT == chan_node_direction_[side][track_id] || IMUX == node_seg_name || OMUX == node_seg_name || GSB == node_seg_name)
+        && (false == is_sb_node_passing_wire(rr_graph, side_manager.get_side(), track_id)))
+        sort_chan_node_in_edges(rr_graph, side_manager.get_side(), track_id);
       }
+      
     }
   }
 }

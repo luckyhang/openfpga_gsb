@@ -122,12 +122,13 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
   annotate_device_rr_gsb(g_vpr_ctx.device(),
                          openfpga_ctx.mutable_device_rr_gsb(),
                          cmd_context.option_enable(cmd, opt_verbose),
-                         cmd_context.option_enable(cmd, opt_enable_gsb_routing));
+                         cmd_context.option_enable(cmd, opt_enable_gsb_routing));/* shen: enable gsb routing */
 
   if (true == cmd_context.option_enable(cmd, opt_sort_edge)) {
+    /* shen: modified to support gsb routing */
     sort_device_rr_gsb_chan_node_in_edges(g_vpr_ctx.device().rr_graph,
                                           openfpga_ctx.mutable_device_rr_gsb(),
-                                          cmd_context.option_enable(cmd, opt_verbose));/* shen: enable gsb routing */
+                                          cmd_context.option_enable(cmd, opt_verbose));
   } 
 
   /* Build multiplexer library */
