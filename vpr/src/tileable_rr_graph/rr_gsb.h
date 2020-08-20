@@ -59,7 +59,18 @@ class RRGSB {
   public: /* Contructors */
     /* shen: enable_gsb_routing */
     RRGSB(const RRGSB&);/* Copy constructor */
-    RRGSB(bool enable_gsb_routing): enable_gsb_routing_(enable_gsb_routing) {};
+    RRGSB(bool enable_gsb_routing = false): enable_gsb_routing_(enable_gsb_routing) {
+      /* Set a clean start! */
+      coordinate_.set(0, 0);
+
+      chan_node_.clear();
+      chan_node_direction_.clear();
+      chan_node_in_edges_.clear();
+
+      ipin_node_.clear();
+
+      opin_node_.clear();
+    };
     //RRGSB();/* Default constructor */
   public: /* Accessors */
     /* Get the number of sides of this SB */

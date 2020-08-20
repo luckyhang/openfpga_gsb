@@ -130,9 +130,6 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
   rr_gsb.init_num_sides(4); /* Fixed number of sides */
 
   if (true == enable_gsb_routing) {
-    /* variables to store nodes index */
-    enum e_side four_sides;
-    enum PORTS  chan_dir_to_port_dir_mapping[2] = {OUT_PORT, IN_PORT};/* 0: INC_DIRECTION; 1: DEC_DIRECRION */
 
     /* find all rr_nodes of chanenls */
     /* Side: Top => 0,Right => 1,Bottom => 2,Left => 3 */
@@ -195,15 +192,15 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
 
           /* Build the GSB: ipin and ipin_grid_side */
           /* Grid[x][y] RIGHT side inputs pins */
-          opin_grid_side[0] = RIGHT;
+          ipin_grid_side[0] = RIGHT;
           /* Grid[x][y] BOTTOM side inputs pins */
-          opin_grid_side[1] = BOTTOM;
+          ipin_grid_side[1] = BOTTOM;
           /* include Grid[x][y+1] Bottom side outputs pins */
           temp_ipin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[0]);
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, ipin_grid_side[0]);
           /* include Grid[x][y] Top side output pins */
           temp_ipin_rr_nodes[1] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
-                                                          gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[1]);
+                                                          gsb_coord.x(), gsb_coord.y(), IPIN, ipin_grid_side[1]);
 
           break;
         
@@ -230,9 +227,9 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
 
           /* Build the GSB: ipin and ipin_grid_side */
           /* Grid[x][y] TOP side inputs pins */
-          opin_grid_side[0] = TOP;
+          ipin_grid_side[0] = TOP;
           /* Grid[x][y] LEFT side inputs pins */
-          opin_grid_side[1] = LEFT;
+          ipin_grid_side[1] = LEFT;
           /* include Grid[x][y+1] Bottom side outputs pins */
           temp_ipin_rr_nodes[0] = find_rr_graph_grid_nodes(vpr_device_ctx.rr_graph, vpr_device_ctx.grid, 
                                                           gsb_coord.x(), gsb_coord.y(), IPIN, opin_grid_side[0]);

@@ -19,8 +19,8 @@ namespace openfpga {
  * Constructors
  ***********************************************************************/
 /* Constructor for an empty object */
-RRGSB::RRGSB(bool enable_gsb_routing) {
-  /* Set a clean start! */
+/*RRGSB::RRGSB(bool enable_gsb_routing) {
+  //Set a clean start!
   coordinate_.set(0, 0);
 
   chan_node_.clear();
@@ -30,7 +30,7 @@ RRGSB::RRGSB(bool enable_gsb_routing) {
   ipin_node_.clear();
 
   opin_node_.clear();
-}
+}*/
 
 /* Copy constructor */
 RRGSB::RRGSB(const RRGSB& src) {
