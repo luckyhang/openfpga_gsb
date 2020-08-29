@@ -351,7 +351,10 @@ bool vpr_flow(t_vpr_setup& vpr_setup, t_arch& arch) {
         }
     }
 
+    // shen: read the rrg file outside
     vpr_create_device(vpr_setup, arch);
+    // shen: return success, because i have loaded the rr_graph data structure
+    return true;
 
     vpr_init_graphics(vpr_setup, arch);
     { //Place

@@ -50,6 +50,24 @@ CircuitModelId find_routing_circuit_model(pugi::xml_node& xml_switch,
   return switch_model;
 }
 
+// shen: overload find_routing_circuit_model() to delete expected_circuit_nodel_type
+static 
+CircuitModelId find_routing_circuit_model(pugi::xml_node& xml_switch,
+                                          const pugiutil::loc_data& loc_data,
+                                          const CircuitLibrary& circuit_lib,
+                                          const std::string& switch_model_name) {
+  /* Find the circuit model id in circuit library */
+  CircuitModelId switch_model = circuit_lib.model(switch_model_name);
+  /* Ensure we have a valid circuit model id! */
+  if (CircuitModelId::INVALID() == switch_model) {
+    archfpga_throw(loc_data.filename_c_str(), loc_data.line(xml_switch),
+                   "Invalid circuit model name '%s'! Unable to find it in circuit library\n",
+                   switch_model_name.c_str());
+  }
+  return switch_model;
+}
+// 
+
 /********************************************************************
  * Parse XML codes about <connection_block> to an object of name-to-circuit mapping
  * Note: this function should be called AFTER the parsing of circuit library!!!
@@ -166,10 +184,15 @@ std::map<std::string, CircuitModelId> read_xml_routing_segment_circuit(pugi::xml
     /* Get the routing segment circuit model name */ 
     std::string seg_model_name = get_attribute(xml_seg, "circuit_model_name", loc_data).as_string();
 
-    CircuitModelId seg_model = find_routing_circuit_model(xml_seg, loc_data,
+    /*CircuitModelId seg_model = find_routing_circuit_model(xml_seg, loc_data,
                                                           circuit_lib, seg_model_name,
                                                           CIRCUIT_MODEL_CHAN_WIRE);
-  
+    */
+    // shen: in gsb routing arch, segment type may not be CIRCUIR_MODEL_CHAN_WIRE, so i overload this function without last argument
+    CircuitModelId seg_model = find_routing_circuit_model(xml_seg, loc_data,
+                                                          circuit_lib, seg_model_name
+                                                          );
+
     /* Ensure that there is no duplicated seg names defined here */
     std::map<std::string, CircuitModelId>::const_iterator it = seg2circuit.find(seg_name);
     if (it != seg2circuit.end()) {

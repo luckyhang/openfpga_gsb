@@ -64,7 +64,8 @@ int main(int argc, const char** argv) {
             return UNIMPLEMENTABLE_EXIT_CODE;
         }
 
-        auto& timing_ctx = g_vpr_ctx.timing();
+        // comment following
+        /*auto& timing_ctx = g_vpr_ctx.timing();
         VTR_LOG("Timing analysis took %g seconds (%g STA, %g slack) (%zu full updates: %zu setup, %zu hold, %zu combined).\n",
                 timing_ctx.stats.timing_analysis_wallclock_time(),
                 timing_ctx.stats.sta_wallclock_time,
@@ -74,10 +75,10 @@ int main(int argc, const char** argv) {
                 timing_ctx.stats.num_full_hold_updates,
                 timing_ctx.stats.num_full_setup_hold_updates);
 
-        /* free data structures */
+    
         vpr_free_all(Arch, vpr_setup);
 
-        VTR_LOG("VPR suceeded\n");
+        VTR_LOG("VPR suceeded\n");*/
 
     } catch (const tatum::Error& tatum_error) {
         VTR_LOG_ERROR("%s\n", format_tatum_error(tatum_error).c_str());
@@ -96,7 +97,7 @@ int main(int argc, const char** argv) {
     } catch (const vtr::VtrError& vtr_error) {
         VTR_LOG_ERROR("%s:%d %s\n", vtr_error.filename_c_str(), vtr_error.line(), vtr_error.what());
 
-        return ERROR_EXIT_CODE;
+        return ERROR_EXIT_CODE; 
     }
 
     /* Signal success to scripts */

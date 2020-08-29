@@ -59,7 +59,9 @@ void process_nodes(pugi::xml_node parent, const pugiutil::loc_data& loc_data);
 void process_edges(pugi::xml_node parent, const pugiutil::loc_data& loc_data, int* wire_to_rr_ipin_switch, const int num_rr_switches);
 void process_channels(t_chan_width& chan_width, const DeviceGrid& grid, pugi::xml_node parent, const pugiutil::loc_data& loc_data);
 void process_rr_node_indices(const DeviceGrid& grid);
-void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data);
+// shen: add argument segment_inf
+void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data, const std::vector<t_segment_inf> segment_inf);
+// 
 void set_cost_indices(pugi::xml_node parent, const pugiutil::loc_data& loc_data, const bool is_global_graph, const int num_seg_types);
 
 /************************ Subroutine definitions ****************************/
@@ -163,15 +165,6 @@ void load_rr_file(const t_graph_type graph_type,
         //edge subsets. Must be done after RR switches have been allocated
         device_ctx.rr_graph.rebuild_node_edges();
 
-        /* Essential check for rr_graph, build look-up */
-        if (false == device_ctx.rr_graph.validate()) {
-            /* Error out if built-in validator of rr_graph fails */
-            vpr_throw(VPR_ERROR_ROUTE,
-                      __FILE__,
-                      __LINE__,
-                      "Fundamental errors occurred when validating rr_graph object!\n");
-        }
-
         //sets the cost index and seg id information
         next_component = get_single_child(rr_graph, "rr_nodes", loc_data);
         set_cost_indices(next_component, loc_data, is_global_graph, segment_inf.size());
@@ -179,20 +172,30 @@ void load_rr_file(const t_graph_type graph_type,
         alloc_and_load_rr_indexed_data(segment_inf, device_ctx.rr_graph,
                                        max_chan_width, *wire_to_rr_ipin_switch, base_cost_type);
 
-        process_seg_id(next_component, loc_data);
+        process_seg_id(next_component, loc_data, segment_inf);
 
         device_ctx.chan_width = nodes_per_chan;
         device_ctx.read_rr_graph_filename = std::string(read_rr_graph_name);
 
         check_rr_graph(graph_type, grid, device_ctx.physical_tile_types);
+
+        /* Essential check for rr_graph, build look-up */
+        /*if (false == device_ctx.rr_graph.validate()) {
+           
+            vpr_throw(VPR_ERROR_ROUTE,
+                      __FILE__,
+                      __LINE__,
+                      "Fundamental errors occurred when validating rr_graph object!\n");
+        }*/
+
         /* Error out if advanced checker of rr_graph fails */
-        if (false == check_rr_graph(device_ctx.rr_graph)) {
+        /*if (false == check_rr_graph(device_ctx.rr_graph)) {
             vpr_throw(VPR_ERROR_ROUTE,
                       __FILE__,
                       __LINE__,
                       "Advanced checking rr_graph object fails! Routing may still work "
                       "but not smooth\n");
-        }
+        }*/
     } catch (pugiutil::XmlError& e) {
         vpr_throw(VPR_ERROR_ROUTE, read_rr_graph_name, e.line(), "%s", e.what());
     }
@@ -247,7 +250,8 @@ void process_switches(pugi::xml_node parent, const pugiutil::loc_data& loc_data)
             rr_switch.R = get_attribute(SwitchSubnode, "R", loc_data).as_float();
             rr_switch.Cin = get_attribute(SwitchSubnode, "Cin", loc_data).as_float();
             rr_switch.Cout = get_attribute(SwitchSubnode, "Cout", loc_data).as_float();
-            rr_switch.Cinternal = get_attribute(SwitchSubnode, "Cinternal", loc_data).as_float();
+            // shen: rrg subnode switches/switch/timing maybe doesn't have attritube Cinternal, just comment for simplicity
+            // rr_switch.Cinternal = get_attribute(SwitchSubnode, "Cinternal", loc_data).as_float();
             rr_switch.Tdel = get_attribute(SwitchSubnode, "Tdel", loc_data).as_float();
         } else {
             rr_switch.R = 0;
@@ -273,7 +277,7 @@ void process_switches(pugi::xml_node parent, const pugiutil::loc_data& loc_data)
 
 /*Only CHANX and CHANY components have a segment id. This function
  *reads in the segment id of each node*/
-void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
+void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data, const std::vector<t_segment_inf> segment_inf) {
     auto& device_ctx = g_vpr_ctx.mutable_device();
     pugi::xml_node segmentSubnode;
     pugi::xml_node rr_node;
@@ -282,6 +286,11 @@ void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
 
     rr_node = get_first_child(parent, "node", loc_data);
 
+    // shen: create_segment() and set_node_segment() mutators are not filled, so i will fill them
+    for(t_segment_inf segment_i_inf : segment_inf) {
+        device_ctx.rr_graph.create_segment(segment_i_inf);
+        
+    }
     while (rr_node) {
         id = get_attribute(rr_node, "id", loc_data).as_int();
         RRNodeId node = RRNodeId(id);
@@ -292,6 +301,9 @@ void process_seg_id(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
             if (attribute) {
                 int seg_id = get_attribute(segmentSubnode, "segment_id", loc_data).as_int(0);
                 device_ctx.rr_indexed_data[device_ctx.rr_graph.node_cost_index(node)].seg_index = seg_id;
+                // shen: set_node_segment() mutator is loaded
+                device_ctx.rr_graph.set_node_segment(node, RRSegmentId(seg_id));
+                // 
             } else {
                 //-1 for non chanx or chany nodes
                 device_ctx.rr_indexed_data[device_ctx.rr_graph.node_cost_index(node)].seg_index = -1;
@@ -332,6 +344,7 @@ void process_nodes(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
         }
 
         const RRNodeId& node = device_ctx.rr_graph.create_node(node_type);
+        //shen: actually set_node_type() mutator in rr_graph is redundant, because create_node() did its work, so rr_graph class need to be pruned
 
         if (device_ctx.rr_graph.node_type(node) == CHANX || device_ctx.rr_graph.node_type(node) == CHANY) {
             const char* correct_direction = get_attribute(rr_node, "direction", loc_data).as_string();
@@ -373,7 +386,12 @@ void process_nodes(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
             }
             device_ctx.rr_graph.set_node_side(node, side);
         }
-
+        // shen: 
+        device_ctx.rr_graph.set_node_xlow(node,x1);
+        device_ctx.rr_graph.set_node_xhigh(node,x2);
+        device_ctx.rr_graph.set_node_ylow(node,y1);
+        device_ctx.rr_graph.set_node_yhigh(node,y2);
+        // 
         device_ctx.rr_graph.set_node_bounding_box(node, vtr::Rect<short>(x1, y1, x2, y2)); 
         device_ctx.rr_graph.set_node_ptc_num(node, get_attribute(locSubnode, "ptc", loc_data).as_int());
 
@@ -387,7 +405,10 @@ void process_nodes(pugi::xml_node parent, const pugiutil::loc_data& loc_data) {
             C = get_attribute(timingSubnode, "C", loc_data).as_float();
         }
         device_ctx.rr_graph.set_node_rc_data_index(node, find_create_rr_rc_data(R, C));
-
+        // shen: for completeness, fill in the mutator set_node_R/C in rr_graph
+        device_ctx.rr_graph.set_node_R(node,R);
+        device_ctx.rr_graph.set_node_C(node,C);
+        // 
         //  <metadata>
         //    <meta name='grid_prefix' >CLBLL_L_</meta>
         //  </metadata>
@@ -489,8 +510,10 @@ void process_edges(pugi::xml_node parent, const pugiutil::loc_data& loc_data, in
             }
         }
         //set edge in correct rr_node data structure
-        device_ctx.rr_graph.create_edge(source_node, sink_node, RRSwitchId(switch_id));
-
+        // shen: fill in the set_edge_switch mutator() in rr_graph
+        RREdgeId rr_edge_id = device_ctx.rr_graph.create_edge(source_node, sink_node, RRSwitchId(switch_id));
+        device_ctx.rr_graph.set_edge_switch(rr_edge_id, RRSwitchId(switch_id));
+        // 
         // Read the metadata for the edge
         auto metadata = get_single_child(edges, "metadata", loc_data, pugiutil::OPTIONAL);
         if (metadata) {

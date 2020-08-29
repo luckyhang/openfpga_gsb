@@ -53,3 +53,6 @@ deploy_key
 vpr/vpr
 vpr/vpr
 openfpga/input_command.txt
+
+# rrg_40.xml
+rrg_40.xml
