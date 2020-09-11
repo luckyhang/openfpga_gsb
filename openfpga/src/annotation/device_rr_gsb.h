@@ -55,6 +55,14 @@ class DeviceRRGSB {
     void clear_sb_unique_module_id(); /* clean the content */
     void clear_gsb_unique_module(); /* clean the content */
     void clear_gsb_unique_module_id(); /* clean the content */
+    /* shen: when enabling gsb routing, need to add imux module, omux module and gsb module */
+    void clear_imux_module();
+    void clear_imux_module_id();
+    void clear_omux_module();
+    void clear_omux_module_id();
+    void clear_gsb_module();
+    void clear_gsb_module_id();
+    /*  */
   private: /* Validators */
     bool validate_coordinate(const vtr::Point<size_t>& coordinate) const; /* Validate if the (x,y) is the range of this device */
     bool validate_side(const e_side& side) const; /* validate if side is in the range of unique_side_module_ */
@@ -63,6 +71,7 @@ class DeviceRRGSB {
     bool validate_cb_type(const t_rr_type& cb_type) const;
   private: /* Internal builders */
     void add_gsb_unique_module(const vtr::Point<size_t>& coordinate);
+
     void add_cb_unique_module(const t_rr_type& cb_type, const vtr::Point<size_t>& coordinate);
     void set_cb_unique_module_id(const t_rr_type& cb_type, const vtr::Point<size_t>& coordinate, size_t id);
     void build_sb_unique_module(const RRGraph& rr_graph); /* Add a switch block to the array, which will automatically identify and update the lists of unique mirrors and rotatable mirrors */

@@ -1054,8 +1054,10 @@ void MuxGraph::build_mux_graph(const CircuitLibrary& circuit_lib,
                                const CircuitModelId& circuit_model,
                                const size_t& mux_size) {
   /* Make sure this model is a MUX */
+  /* shen: add CIRCUIR_MODEL_MUX_NON_CONFIG */
   VTR_ASSERT((CIRCUIT_MODEL_MUX == circuit_lib.model_type(circuit_model))
-          || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) );
+          || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) 
+          || (CIRCUIT_MDOEL_MUX_NON_CONFIG == circuit_lib.model_type(circuit_model)));
 
   /* Make sure mux_size is valid */
   VTR_ASSERT(valid_mux_implementation_num_inputs(mux_size));

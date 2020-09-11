@@ -32,7 +32,8 @@ void sort_device_rr_gsb_chan_node_in_edges(const RRGraph& rr_graph,
 void annotate_rr_graph_circuit_models(const DeviceContext& vpr_device_ctx, 
                                       const Arch& openfpga_arch,
                                       VprDeviceAnnotation& vpr_device_annotation,
-                                      const bool& verbose_output);
+                                      const bool& verbose_output,
+                                      const bool& enable_gsb_routing);
 
 } /* end namespace openfpga */
 

@@ -59,6 +59,11 @@ class ModuleManager {
       MODULE_HARD_IP,      /* Hard IP modules */
       MODULE_SB,           /* Switch block modules */
       MODULE_CB,           /* Connection block modules */
+      /* shen: add IMUX|OMUX|GSB */
+      MODULE_IMUX,
+      MODULE_OMUX,
+      MODULE_GSB,
+      /*  */
       MODULE_IO,           /* I/O modules */
       MODULE_VDD,          /* Local VDD lines to generate constant voltages */
       MODULE_VSS,          /* Local VSS lines to generate constant voltages */

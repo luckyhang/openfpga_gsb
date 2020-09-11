@@ -38,6 +38,10 @@ e_circuit_model_type string_to_circuit_model_type(const std::string& type_string
     return CIRCUIT_MODEL_MUX;
   }
 
+  if (std::string("mux_non_config") == type_string) {
+    return CIRCUIT_MDOEL_MUX_NON_CONFIG;
+  }
+
   if (std::string("lut") == type_string) {
     return CIRCUIT_MODEL_LUT;
   }
@@ -750,8 +754,10 @@ void read_xml_circuit_model(pugi::xml_node& xml_model,
   }
 
   /* Pass-gate-logic attributes, required by LUT and MUX */
+  /* shen : add CIRCUIR_MODEL_MUX_NON_CONFIG */
   if ( (CIRCUIT_MODEL_LUT == circuit_lib.model_type(model)) 
-    || (CIRCUIT_MODEL_MUX == circuit_lib.model_type(model)) ) {
+    || (CIRCUIT_MODEL_MUX == circuit_lib.model_type(model)) 
+    || (CIRCUIT_MDOEL_MUX_NON_CONFIG == circuit_lib.model_type(model))) {
     auto xml_pass_gate_logic = get_single_child(xml_model, "pass_gate_logic", loc_data); 
     circuit_lib.set_model_pass_gate_logic(model, get_attribute(xml_pass_gate_logic, "circuit_model_name", loc_data).as_string());
   } 

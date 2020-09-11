@@ -16,7 +16,8 @@
 namespace openfpga {
 
 MuxLibrary build_device_mux_library(const DeviceContext& vpr_device_ctx,
-                                    const OpenfpgaContext& openfpga_ctx);
+                                    const OpenfpgaContext& openfpga_ctx,
+                                    const bool& enable_non_config_mux = false);
 
 } /* end namespace openfpga */
 

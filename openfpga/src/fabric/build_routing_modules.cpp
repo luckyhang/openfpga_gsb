@@ -332,7 +332,7 @@ void build_switch_block_module(ModuleManager& module_manager,
                                const e_config_protocol_type& sram_orgz_type,
                                const CircuitModelId& sram_model,
                                const RRGSB& rr_gsb,
-                               const bool& verbose) {
+                               const bool& verbose){
   /* Create a Module of Switch Block and add to module manager */
   vtr::Point<size_t> gsb_coordinate(rr_gsb.get_sb_x(), rr_gsb.get_sb_y());
   ModuleId sb_module = module_manager.add_module(generate_switch_block_module_name(gsb_coordinate)); 
@@ -923,6 +923,105 @@ void build_flatten_connection_block_modules(ModuleManager& module_manager,
   }
 }
 
+/* ************************************************************************ */
+/* shen: build_gsb_module() | build_imux_module() | build_omux_module() */
+/* ************************************************************************ */
+
+
+/* TOP and RIGHT side have 158 tracks which are all routing segments, while BOTTOM 
+ *and LEFT sides have 244 tracks which composed of 158 routing segments and imux|omux|gsb segments.
+ *When building gsb, the inputs come from 4 sides routing channels and omux, so we just need to care 
+ *about gsb segments. imux|omux are considered in building IMUX and OMUX module*/
+static
+void build_gsb_module(ModuleManager& module_manager,
+                      DecoderLibrary& decoder_lib,
+                      const VprDeviceAnnotation& device_annotation,
+                      const RRGraph& rr_graph,
+                      const CircuitLibrary& circuit_lib,
+                      const e_config_protocol_type& sram_orgz_type,
+                      const CircuitModelId& sram_model,
+                      const RRGSB& rr_gsb,
+                      const bool& verbose) {
+  /* gsb module coordinate */
+  vtr::Point<size_t> gsb_coordinate(rr_gsb.get_sb_x(), rr_gsb.get_sb_y());
+
+  /* add module to module_manager and set usage */
+  ModuleId gsb_module = module_manager.add_module(generate_switch_block_module_name(gsb_coordinate));
+  module_manager.set_module_usage(gsb_module, ModuleManager::MODULE_GSB);
+
+  VTR_LOGV(verbose,
+          "Building module '%s' ...",
+          generate_switch_block_module_name(gsb_coordinate));
+  
+  /* create a lookup */
+  std::map<ModulePinInfo, ModuleNetId> input_port_to_module_nets;
+
+  /* add routing channel ports at each side of gsb module */
+  for (size_t side = 0; side < rr_gsb.get_num_sides(); ++side) {
+    SideManager side_manager(side);
+
+    /* chan input|output ports size */
+    size_t chan_input_port_size = 0;
+    size_t chan_output_port_size = 0;
+
+    for (size_t itrack = 0; itrack < rr_gsb.get_chan_width(side_manager.get_side()); ++itrack) {
+      switch (rr_gsb.get_chan_node_direction(side_manager, itrack))
+      {
+      case OUT_PORT:
+        chan_output_port_size++;
+        break;
+      case IN_PORT:
+        chan_input_port_size++;
+        break;
+      default:
+        VTR_LOGF_ERROR(__FILE__, __LINE__,
+                      "Invalid direction of chan[%d][%d]_track[%d]!\n",
+                      rr_gsb.get_sb_x(), rr_gsb.get_sb_y(), itrack);
+        break;
+      }
+    }
+
+  }
+
+
+
+
+
+}
+
+static
+void build_imux_module(ModuleManager& module_manager,
+                      DecoderLibrary& decoder_lib,
+                      const DeviceContext& device_ctx,
+                      const VprDeviceAnnotation& device_annotation,
+                      const DeviceRRGSB& device_rr_gsb,
+                      const CircuitLibrary& circuit_lib,
+                      const e_config_protocol_type& sram_orgz_type,
+                      const CircuitModelId& sram_model,
+                      const bool& verbose) {
+  /* todo */
+  ;
+}
+
+static
+void build_omux_module(ModuleManager& module_manager,
+                      DecoderLibrary& decoder_lib,
+                      const DeviceContext& device_ctx,
+                      const VprDeviceAnnotation& device_annotation,
+                      const DeviceRRGSB& device_rr_gsb,
+                      const CircuitLibrary& circuit_lib,
+                      const e_config_protocol_type& sram_orgz_type,
+                      const CircuitModelId& sram_model,
+                      const bool& verbose) {
+  /* todo */
+  ;
+}
+
+
+
+
+
+
 /********************************************************************
  * A top-level function of this file
  * Build all the modules for global routing architecture of a FPGA fabric
@@ -940,7 +1039,8 @@ void build_flatten_routing_modules(ModuleManager& module_manager,
                                    const CircuitLibrary& circuit_lib,
                                    const e_config_protocol_type& sram_orgz_type,
                                    const CircuitModelId& sram_model,
-                                   const bool& verbose) {
+                                   const bool& verbose,
+                                   const bool& enable_gsb_routing) {
 
   vtr::ScopedStartFinishTimer timer("Build routing modules...");
 
@@ -953,7 +1053,9 @@ void build_flatten_routing_modules(ModuleManager& module_manager,
       if (false == rr_gsb.is_sb_exist()) {
         continue;
       }
-      build_switch_block_module(module_manager,
+      /* shen: add imux|omux|gsb routing modules */
+      if (false == enable_gsb_routing) {
+        build_switch_block_module(module_manager,
                                 decoder_lib,
                                 device_annotation,
                                 device_ctx.rr_graph,
@@ -961,28 +1063,58 @@ void build_flatten_routing_modules(ModuleManager& module_manager,
                                 sram_orgz_type, sram_model, 
                                 rr_gsb,
                                 verbose);
+      } else {
+        build_gsb_module(module_manager,
+                                decoder_lib,
+                                device_annotation,
+                                device_ctx.rr_graph,
+                                circuit_lib, 
+                                sram_orgz_type, sram_model, 
+                                rr_gsb,
+                                verbose);
+      }
+      
     }
   }
+  if (false == enable_gsb_routing) {
+    build_flatten_connection_block_modules(module_manager,
+                                            decoder_lib,
+                                            device_ctx, 
+                                            device_annotation, 
+                                            device_rr_gsb, 
+                                            circuit_lib, 
+                                            sram_orgz_type, sram_model, 
+                                            CHANX,
+                                            verbose);
 
-  build_flatten_connection_block_modules(module_manager,
-                                         decoder_lib,
-                                         device_ctx, 
-                                         device_annotation, 
-                                         device_rr_gsb, 
-                                         circuit_lib, 
-                                         sram_orgz_type, sram_model, 
-                                         CHANX,
-                                         verbose);
+    build_flatten_connection_block_modules(module_manager,
+                                            decoder_lib,
+                                            device_ctx, 
+                                            device_annotation, 
+                                            device_rr_gsb, 
+                                            circuit_lib,
+                                            sram_orgz_type, sram_model, 
+                                            CHANY,
+                                            verbose);
+  } else {
+    build_imux_module(module_manager,
+                      decoder_lib,
+                      device_ctx, 
+                      device_annotation, 
+                      device_rr_gsb, 
+                      circuit_lib, 
+                      sram_orgz_type, sram_model, 
+                      verbose);
 
-  build_flatten_connection_block_modules(module_manager,
-                                         decoder_lib,
-                                         device_ctx, 
-                                         device_annotation, 
-                                         device_rr_gsb, 
-                                         circuit_lib,
-                                         sram_orgz_type, sram_model, 
-                                         CHANY,
-                                         verbose);
+    build_omux_module(module_manager,
+                      decoder_lib,
+                      device_ctx, 
+                      device_annotation, 
+                      device_rr_gsb, 
+                      circuit_lib,
+                      sram_orgz_type, sram_model, 
+                      verbose);
+  }
 }
 
 /********************************************************************

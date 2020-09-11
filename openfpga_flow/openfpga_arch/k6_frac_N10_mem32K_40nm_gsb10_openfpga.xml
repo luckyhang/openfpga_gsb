@@ -120,6 +120,16 @@
       <port type="output" prefix="out" size="1"/>
       <port type="sram" prefix="sram" size="1"/>
     </circuit_model>
+    <!--shen: for mux inside clb, i am curious why the mux input size is just 1-->
+    <circuit_model type="mux_non_config" name="mux_inside_clb" prefix="mux_inside_clb" dump_structural_verilog="true">
+      <design_technology type="cmos" structure="multi_level" num_level="2" const_input_val="1"/>
+      <input_buffer exist="true" circuit_model_name="INVTX1"/>
+      <output_buffer exist="true" circuit_model_name="INVTX1"/>
+      <pass_gate_logic circuit_model_name="TGATE"/>
+      <port type="input" prefix="in" size="1"/>
+      <port type="output" prefix="out" size="1"/>
+      <port type="sram" prefix="sram" size="1"/>
+    </circuit_model>
     <circuit_model type="mux" name="mux_2level_tapbuf" prefix="mux_2level_tapbuf" dump_structural_verilog="true">
       <design_technology type="cmos" structure="multi_level" num_level="2" add_const_input="true" const_input_val="1"/>
       <input_buffer exist="true" circuit_model_name="INVTX1"/>
@@ -209,12 +219,12 @@
       <design_technology type="cmos"/>
       <input_buffer exist="true" circuit_model_name="INVTX1"/>
       <output_buffer exist="true" circuit_model_name="INVTX1"/>
-      <port type="input" prefix="waddr" size="10"/>
-      <port type="input" prefix="raddr" size="10"/>
-      <port type="input" prefix="d_in" size="64"/>
-      <port type="input" prefix="wen" size="1"/>
+      <port type="input" prefix="waddr" size="9"/>
+      <port type="input" prefix="addr" size="9"/>
+      <port type="input" prefix="data" size="64"/>
+      <port type="input" prefix="we" size="1"/>
       <port type="input" prefix="ren" size="1"/>
-      <port type="output" prefix="d_out" size="64"/>
+      <port type="output" prefix="out" size="64"/>
       <port type="clock" prefix="clk" size="1" is_global="true" default_val="0"/>
     </circuit_model>
     <circuit_model type="hard_logic" name="mul_93x93" prefix="mul_93x93" verilog_netlist="${OPENFPGA_PATH}/openfpga_flow/VerilogNetlists/mul_93x93.v">
@@ -233,7 +243,12 @@
     <switch name="ipin_cblock" circuit_model_name="mux_2level_tapbuf"/>
   </connection_block>
   <switch_block>
+    <!--shen: for io block, IPIN node may have multi-input edges annotated switch delayless, for simplicity, make it tangiable-->
+    <switch name="__vpr_delayless_switch__" circuit_model_name="mux_2level_tapbuf"/>
     <switch name="0" circuit_model_name="mux_2level_tapbuf"/>
+    <!--shen: switch annotation must be complete-->
+    <switch name="ipin_cblock" circuit_model_name="mux_2level_tapbuf"/>
+    <switch name="mux0" circuit_model_name="mux_2level_tapbuf"/>
   </switch_block>
   <routing_segment>
     <segment name="l1" circuit_model_name="chan_segment"/>
@@ -260,10 +275,13 @@
 
     <!-- physical pb_type binding in complex block CLB -->
     <!-- physical mode will be the default mode if not specified -->
+    <pb_type name="plb">
+      <!-- Binding interconnect to circuit models as their physical implementation, if not defined, we use the default model -->
+      <interconnect name="ix_foo" circuit_model_name="mux_2level_tapbuf"/>
+    </pb_type>
     
     <pb_type name="plb.ble[n1_lut6].lut_6" circuit_model_name="lut6"/>
     <pb_type name="plb.ble[n1_lut6].ff" circuit_model_name="static_dff"/>
-    <pb_type name="plb.ble[n1_lut6].mm" circuit_model_name="mux_2level"/>
     
     <!-- End physical pb_type binding in complex block clb -->
 

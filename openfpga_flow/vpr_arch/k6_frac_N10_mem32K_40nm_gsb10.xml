@@ -82,16 +82,6 @@
        that describe them.
   -->
   <models>
-      <model name="mux">
-          <input_ports>
-              <port name="a" combinational_sink_ports="out"/>
-              <port name="b" combinational_sink_ports="out"/>
-              <port name="sel"/>
-          </input_ports>
-          <output_ports>
-              <port name="out"/>
-          </output_ports>
-      </model>
 
     <model name="io">
       <input_ports>
@@ -389,7 +379,7 @@
         <output name="out" num_pins="3"/>
         <clock name="clk" num_pins="1"/>
 
-        <!--mode name="n1_lut6"-->      
+        <mode name="n1_lut6">      
           <pb_type name="lut_6" blif_model=".names" num_pb="1" class="lut">
             <input name="in" num_pins="6" port_class="lut_in"/>
             <output name="out" num_pins="1" port_class="lut_out"/>
@@ -409,14 +399,6 @@
             <T_setup value="66e-12" port="ff.D" clock="clk"/>
             <T_clock_to_Q max="124e-12" port="ff.Q" clock="clk"/>
           </pb_type>
-          <pb_type name="mm" blif_model=".subckt mux" num_pb="1">
-            <input name="a" num_pins="1"/>
-            <input name="b" num_pins="1"/>
-            <input name="sel" num_pins="1"/>
-            <output name="out" num_pins="1"/>
-            <delay_constant max="1.523e-9" in_port="mm.a" out_port="mm.out"/>
-            <delay_constant max="1.523e-9" in_port="mm.b" out_port="mm.out"/>
-          </pb_type>
           <interconnect>
             <direct name="direcrs1" input="lut_6.out" output="ff.D"/>
             
@@ -426,13 +408,13 @@
             <direct name="direcrs4" input="lut_6.out" output="ble.out[0:0]"/>
             <direct name="direcrs5" input="ff.Q" output="ble.out[1:1]"/>
 
-            <direct name="direcrs6" input="ble.in[6:6]" output="mm.a"/>
-            <direct name="direcrs7" input="ble.in[6:6]" output="mm.b"/>
-            <direct name="direcrs8" input="lut_6.out" output="mm.sel"/>
-            <direct name="direcrs9" input="mm.out" output="ble.out[2:2]"/>
+            <mux name="ix_foo" input="ble.in[6:6] ble.in[7:7]" output="ble.out[2:2]">
+              <delay_constant max="25e-12" in_port="ble.in[6:6]" out_port="ble.out[2:2]"/>
+              <delay_constant max="45e-12" in_port="ble.in[7:7]" out_port="ble.out[2:2]"/>
+            </mux>
             <!--to be completed-->
           </interconnect>
-        <!--/mode-->
+        </mode>
       </pb_type>
       <interconnect>
         <direct name="clbins1" input="plb.Ia" output="ble[0:0].in[5:0]"/>

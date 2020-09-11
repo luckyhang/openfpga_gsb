@@ -270,6 +270,9 @@ ShellCommandId add_openfpga_build_fabric_command(openfpga::Shell<OpenfpgaContext
 
   Command shell_cmd("build_fabric");
 
+  /* Add an option '--enable_gsb_rouging' */
+  shell_cmd.add_option("enable_gsb_routing", false, "whether to enable gsb routing architecture");
+
   /* Add an option '--frame_view' */
   shell_cmd.add_option("frame_view", false, "Build only frame view of the fabric (nets are skipped)");
 

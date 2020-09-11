@@ -94,22 +94,26 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
   annotate_rr_graph_circuit_models(g_vpr_ctx.device(),
                                    openfpga_ctx.arch(),
                                    openfpga_ctx.mutable_vpr_device_annotation(),
-                                   cmd_context.option_enable(cmd, opt_verbose));
+                                   cmd_context.option_enable(cmd, opt_verbose),
+                                   cmd_context.option_enable(cmd, opt_enable_gsb_routing));/* shen:  escape some circuit model check, for example, channel segment may be annotated with mux circuit model because imux|omux|gsb_medium*/
 
   /* Annotate routing results:
    * - net mapping to each rr_node 
    * - previous nodes driving each rr_node 
    */
-  openfpga_ctx.mutable_vpr_routing_annotation().init(g_vpr_ctx.device().rr_graph);
+  /* shen: bypass routing annotation process when enabling gsb routing */
+  if (false == cmd_context.option_enable(cmd, opt_enable_gsb_routing)) {
+    openfpga_ctx.mutable_vpr_routing_annotation().init(g_vpr_ctx.device().rr_graph);
 
-  annotate_rr_node_nets(g_vpr_ctx.device(), g_vpr_ctx.clustering(), g_vpr_ctx.routing(), 
-                        openfpga_ctx.mutable_vpr_routing_annotation(),
-                        cmd_context.option_enable(cmd, opt_verbose));
+    annotate_rr_node_nets(g_vpr_ctx.device(), g_vpr_ctx.clustering(), g_vpr_ctx.routing(), 
+                          openfpga_ctx.mutable_vpr_routing_annotation(),
+                          cmd_context.option_enable(cmd, opt_verbose));
 
-  annotate_rr_node_previous_nodes(g_vpr_ctx.device(), g_vpr_ctx.clustering(), g_vpr_ctx.routing(), 
-                                  openfpga_ctx.mutable_vpr_routing_annotation(),
-                                  cmd_context.option_enable(cmd, opt_verbose));
-
+    annotate_rr_node_previous_nodes(g_vpr_ctx.device(), g_vpr_ctx.clustering(), g_vpr_ctx.routing(), 
+                                    openfpga_ctx.mutable_vpr_routing_annotation(),
+                                    cmd_context.option_enable(cmd, opt_verbose));
+  }
+  
 
   /* Build the routing graph annotation
    * - RRGSB
@@ -139,12 +143,15 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
   openfpga_ctx.mutable_tile_direct() = build_device_tile_direct(g_vpr_ctx.device(),
                                                                 openfpga_ctx.arch().arch_direct,
                                                                 cmd_context.option_enable(cmd, opt_verbose));
-
+  /* shen: temporarily escape mapped annotation */
   /* Annotate placement results */
-  annotate_mapped_blocks(g_vpr_ctx.device(), 
-                         g_vpr_ctx.clustering(),
-                         g_vpr_ctx.placement(),
-                         openfpga_ctx.mutable_vpr_placement_annotation());
+  if (false == cmd_context.option_enable(cmd, opt_enable_gsb_routing)) {
+    annotate_mapped_blocks(g_vpr_ctx.device(), 
+                          g_vpr_ctx.clustering(),
+                          g_vpr_ctx.placement(),
+                          openfpga_ctx.mutable_vpr_placement_annotation());
+  }
+  
 
   /* Read activity file is manadatory in the following flow-run settings
    * - When users specify that number of clock cycles 
@@ -162,10 +169,12 @@ int link_arch(OpenfpgaContext& openfpga_ctx,
    * TODO: This will be removed when openfpga flow is updated  
    */
   //openfpga_ctx.mutable_simulation_setting() = openfpga_ctx.mutable_arch().sim_setting;
-  annotate_simulation_setting(g_vpr_ctx.atom(),
-                              openfpga_ctx.net_activity(),
-                              openfpga_ctx.mutable_simulation_setting());
-
+  /* shen: temporarily escape mapped annotation */
+  if (false == cmd_context.option_enable(cmd, opt_enable_gsb_routing)) {
+    annotate_simulation_setting(g_vpr_ctx.atom(),
+                                openfpga_ctx.net_activity(),
+                                openfpga_ctx.mutable_simulation_setting());
+  }
   /* TODO: should identify the error code from internal function execution */
   return CMD_EXEC_SUCCESS;
 } 

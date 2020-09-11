@@ -307,12 +307,6 @@ void RRGSB::get_node_side_and_index(const RRGraph& rr_graph,
                                     int& node_index) const {
   size_t side;
   SideManager side_manager;
-  /* shen: to identify imux|omux|gsb node */
-  if (true == enable_gsb_routing_) {
-    RRSegmentId node_seg_id = rr_graph.node_segment(node);
-    std::string node_seg_name = rr_graph.get_segment(node_seg_id).name;
-  }
-  /*  */
 
   /* Count the number of existence of cur_rr_node in cur_sb_info
    * It could happen that same cur_rr_node appears on different sides of a SB
@@ -325,10 +319,11 @@ void RRGSB::get_node_side_and_index(const RRGraph& rr_graph,
     side_manager.set_side(side);
     /* shen: when enable gsb routing, imux|omux|gsb maybe OUT_PORTS */
     if (false == enable_gsb_routing_) {
+      VTR_ASSERT(IN_PORT == node_direction);
       node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction);
     } else {
       VTR_ASSERT(IN_PORT == node_direction || OUT_PORT == node_direction);
-      const PORTS node_direction_opposite = (node_direction == IN_PORT) ? OUT_PORT : IN_PORT;
+      PORTS node_direction_opposite = (node_direction == IN_PORT) ? OUT_PORT : IN_PORT;
       node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction);
       /* shen: node_direction not found, try node_direction_opposite, because imux|omux|gsb can only be IN_PORT or OUT_PORT */
       if (-1 == node_index) node_index = get_node_index(rr_graph, node, side_manager.get_side(), node_direction_opposite);
@@ -789,14 +784,8 @@ void RRGSB::init_num_sides(const size_t& num_sides) {
   /* Initialize the vectors */
   chan_node_.resize(num_sides);
   chan_node_direction_.resize(num_sides);
-  if (true == enable_gsb_routing_) {
-    ipin_node_.resize(2);/* shen: at top side of the clb */
-    opin_node_.resize(2);/* shen: at right side of the clb */
-  }else {
-    ipin_node_.resize(num_sides);
-    opin_node_.resize(num_sides);
-  }
-  
+  ipin_node_.resize(num_sides);
+  opin_node_.resize(num_sides);
 }
 
 /* Add a node to the chan_node_ list and also assign its direction in chan_node_direction_ */
@@ -911,7 +900,7 @@ void RRGSB::sort_chan_node_in_edges(const RRGraph& rr_graph) {
     chan_node_in_edges_[side].resize(chan_node_[side].get_chan_width());
     for (size_t track_id = 0; track_id < chan_node_[side].get_chan_width(); ++track_id) {
       /* Only sort the output nodes and bypass passing wires */
-      if (enable_gsb_routing_) {
+      if (false == enable_gsb_routing_) {
         if ( (OUT_PORT == chan_node_direction_[side][track_id])
         && (false == is_sb_node_passing_wire(rr_graph, side_manager.get_side(), track_id)) ) {  
         sort_chan_node_in_edges(rr_graph, side_manager.get_side(), track_id); 
@@ -919,9 +908,12 @@ void RRGSB::sort_chan_node_in_edges(const RRGraph& rr_graph) {
       } else {
         /* shen: imux|omux|gsb maybe IN_PORTS, but we have to consider them*/
         std::string node_seg_name = rr_graph.get_segment(get_chan_node_segment((e_side&)side, track_id)).name;
-        if ((OUT_PORT == chan_node_direction_[side][track_id] || IMUX == node_seg_name || OMUX == node_seg_name || GSB == node_seg_name)
-        && (false == is_sb_node_passing_wire(rr_graph, side_manager.get_side(), track_id)))
-        sort_chan_node_in_edges(rr_graph, side_manager.get_side(), track_id);
+        if ((OUT_PORT == chan_node_direction_[side][track_id] || static_cast<std::string>(IMUX) == node_seg_name || static_cast<std::string>(OMUX) == node_seg_name || static_cast<std::string>(GSB) == node_seg_name)
+        && (false == is_sb_node_passing_wire(rr_graph, side_manager.get_side(), track_id))) {
+          sort_chan_node_in_edges(rr_graph, side_manager.get_side(), track_id);
+        }
+        
+        
       }
       
     }
@@ -1136,17 +1128,20 @@ size_t RRGSB::get_track_id_first_short_connection(const RRGraph& rr_graph, const
  ***********************************************************************/
 /* Validate if the number of sides are consistent among internal data arrays ! */
 bool RRGSB::validate_num_sides() const {
-  size_t num_sides = chan_node_direction_.size();
+  size_t chan_node_num_sides = chan_node_direction_.size();
+  /* shen: make checking passed */
+  size_t ipin_node_num_sides = ipin_node_.size();
+  size_t opin_node_num_sides = opin_node_.size();
 
-  if ( num_sides != chan_node_.size() ) {
+  if ( chan_node_num_sides != chan_node_.size() ) {
     return false;
   }
 
-  if ( num_sides != ipin_node_.size() ) {
+  if ( ipin_node_num_sides != ipin_node_.size() ) {
     return false;
   }
 
-  if ( num_sides != opin_node_.size() ) {
+  if ( opin_node_num_sides != opin_node_.size() ) {
     return false;
   }
 

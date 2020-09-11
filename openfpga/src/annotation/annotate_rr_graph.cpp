@@ -151,7 +151,10 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
       switch (side) {
         case TOP:/* on TOP we need to build OMUX */
           /* todo: for the border, we should take special care */
-
+          if (gsb_coord.y() == gsb_range.y()) {
+            rr_gsb.clear_one_side(side_manager.get_side());
+            break;
+          }
           /* routing channels */
           /* todo: build_one_rr_chan need to be modified to consider OMUX node of CHANY, ask qian */
           rr_chan = build_one_rr_chan(vpr_device_ctx, CHANY, coordinate, enable_gsb_routing);
@@ -161,7 +164,10 @@ RRGSB build_rr_gsb(const DeviceContext& vpr_device_ctx,
       
         case RIGHT:
           /* todo: for the border, we should take special care */
-
+        if (gsb_coord.x() == gsb_range.x()) {
+          rr_gsb.clear_one_side(side_manager.get_side());
+          break;
+        }
           /* routing channels */
           /* we assume that rr_node of CHANX/CHANY type on the right side of gsb are only segments, not newly-added IMUX/OMUX*/
           rr_chan = build_one_rr_chan(vpr_device_ctx, CHANX, coordinate, enable_gsb_routing);
@@ -663,6 +669,7 @@ void annotate_device_rr_gsb(const DeviceContext& vpr_device_ctx,
   vtr::ScopedStartFinishTimer timer("Build General Switch Block(GSB) annotation on top of routing resource graph");
 
   /* Note that the GSB array is smaller than the grids by 1 column and 1 row!!! */
+  /* shen: because the peripheral EMPTY grid, GSB array is smaller than the grids by 2 colums and 2 rows */
   vtr::Point<size_t> gsb_range(vpr_device_ctx.grid.width() - 1, vpr_device_ctx.grid.height() - 1);
   device_rr_gsb.reserve(gsb_range);
 
@@ -672,8 +679,9 @@ void annotate_device_rr_gsb(const DeviceContext& vpr_device_ctx,
 
   size_t gsb_cnt = 0;
   /* For each switch block, determine the size of array */
-  for (size_t ix = 0; ix < gsb_range.x(); ++ix) {
-    for (size_t iy = 0; iy < gsb_range.y(); ++iy) {
+  /* shen: debug for coordinate, 0->EMPTY; 1->IO; 2->plb */
+  for (size_t ix = 1; ix < gsb_range.x(); ++ix) {
+    for (size_t iy = 1; iy < gsb_range.y(); ++iy) {
       /* Here we give the builder the fringe coordinates so that it can handle the GSBs at the borderside correctly
        * sort drive_rr_nodes should be called if required by users
        */
@@ -713,14 +721,12 @@ void sort_device_rr_gsb_chan_node_in_edges(const RRGraph& rr_graph,
            gsb_range.x(), gsb_range.y());
 
   size_t gsb_cnt = 0;
-
   /* For each switch block, determine the size of array */
   for (size_t ix = 0; ix < gsb_range.x(); ++ix) {
     for (size_t iy = 0; iy < gsb_range.y(); ++iy) {
       vtr::Point<size_t> gsb_coordinate(ix, iy);
       RRGSB& rr_gsb = device_rr_gsb.get_mutable_gsb(gsb_coordinate);
       rr_gsb.sort_chan_node_in_edges(rr_graph);
-
       gsb_cnt++; /* Update counter */
 
       /* Print info */
@@ -744,7 +750,8 @@ static
 void annotate_rr_switch_circuit_models(const DeviceContext& vpr_device_ctx, 
                                        const Arch& openfpga_arch,
                                        VprDeviceAnnotation& vpr_device_annotation,
-                                       const bool& verbose_output) {
+                                       const bool& verbose_output,
+                                       const bool& enable_gsb_routing = false) {
   size_t count = 0;
 
   for (size_t iswitch = 0; iswitch < vpr_device_ctx.rr_switch_inf.size(); ++iswitch) {
@@ -753,9 +760,13 @@ void annotate_rr_switch_circuit_models(const DeviceContext& vpr_device_ctx,
      * - SOURCE and OPIN
      * - IPIN and SINK  
      */
-    if (switch_name == std::string(VPR_DELAYLESS_SWITCH_NAME)) {
+    /* shen: when enabling gsb routing, there are multiple imux nodes to IPIN in terms of IO  */
+    if (false == enable_gsb_routing) {
+      if (switch_name == std::string(VPR_DELAYLESS_SWITCH_NAME)) {
       continue;
+      }
     }
+    
 
     CircuitModelId circuit_model = CircuitModelId::INVALID();
     /* The name-to-circuit mapping is stored in either cb_switch-to-circuit or sb_switch-to-circuit,
@@ -811,7 +822,8 @@ static
 void annotate_rr_segment_circuit_models(const DeviceContext& vpr_device_ctx, 
                                         const Arch& openfpga_arch,
                                         VprDeviceAnnotation& vpr_device_annotation,
-                                        const bool& verbose_output) {
+                                        const bool& verbose_output,
+                                        const bool& enable_gsb_routing) {
   size_t count = 0;
 
   for (size_t iseg = 0; iseg < vpr_device_ctx.arch->Segments.size(); ++iseg) {
@@ -831,12 +843,23 @@ void annotate_rr_segment_circuit_models(const DeviceContext& vpr_device_ctx,
     }
 
     /* Check the circuit model type */
-    if (CIRCUIT_MODEL_CHAN_WIRE != openfpga_arch.circuit_lib.model_type(circuit_model)) {
+    /* shen: intentionally escape type checking when circuit_model type is mux, because rr_segment include imux|omux|gsb mux circuit model type */
+    if (enable_gsb_routing) {
+      if (CIRCUIT_MODEL_CHAN_WIRE != openfpga_arch.circuit_lib.model_type(circuit_model) && CIRCUIT_MODEL_MUX != openfpga_arch.circuit_lib.model_type(circuit_model)) {
       VTR_LOG_ERROR("Require circuit model type '%s' for a routing segment '%s'!\nPlease check your OpenFPGA architecture XML!\n",
                     CIRCUIT_MODEL_TYPE_STRING[CIRCUIT_MODEL_CHAN_WIRE],
                     segment_name.c_str());
       exit(1);
+      }
+    } else {
+      if (CIRCUIT_MODEL_CHAN_WIRE != openfpga_arch.circuit_lib.model_type(circuit_model)) {
+      VTR_LOG_ERROR("Require circuit model type '%s' for a routing segment '%s'!\nPlease check your OpenFPGA architecture XML!\n",
+                    CIRCUIT_MODEL_TYPE_STRING[CIRCUIT_MODEL_CHAN_WIRE],
+                    segment_name.c_str());
+      exit(1);
+      }
     }
+    
   
     /* Now update the device annotation */
     vpr_device_annotation.add_rr_segment_circuit_model(RRSegmentId(iseg), circuit_model);
@@ -913,12 +936,13 @@ void annotate_direct_circuit_models(const DeviceContext& vpr_device_ctx,
 void annotate_rr_graph_circuit_models(const DeviceContext& vpr_device_ctx, 
                                       const Arch& openfpga_arch,
                                       VprDeviceAnnotation& vpr_device_annotation,
-                                      const bool& verbose_output) {
+                                      const bool& verbose_output,
+                                      const bool& enable_gsb_routing) {
   /* Iterate over each rr_switch in the device context and bind with names */
-  annotate_rr_switch_circuit_models(vpr_device_ctx, openfpga_arch, vpr_device_annotation, verbose_output);
+  annotate_rr_switch_circuit_models(vpr_device_ctx, openfpga_arch, vpr_device_annotation, verbose_output, enable_gsb_routing);
 
   /* Iterate over each rr_segment in the device context and bind with names */
-  annotate_rr_segment_circuit_models(vpr_device_ctx, openfpga_arch, vpr_device_annotation, verbose_output);
+  annotate_rr_segment_circuit_models(vpr_device_ctx, openfpga_arch, vpr_device_annotation, verbose_output, enable_gsb_routing);
 
   /* Iterate over each direct connection in the device context and bind with names */
   annotate_direct_circuit_models(vpr_device_ctx, openfpga_arch, vpr_device_annotation, verbose_output);

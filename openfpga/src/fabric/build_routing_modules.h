@@ -27,7 +27,8 @@ void build_flatten_routing_modules(ModuleManager& module_manager,
                                    const CircuitLibrary& circuit_lib,
                                    const e_config_protocol_type& sram_orgz_type,
                                    const CircuitModelId& sram_model,
-                                   const bool& verbose);
+                                   const bool& verbose,
+                                   const bool& enable_gsb_routing = false);
 
 void build_unique_routing_modules(ModuleManager& module_manager,
                                   DecoderLibrary& decoder_lib,

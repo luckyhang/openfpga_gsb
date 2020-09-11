@@ -40,7 +40,8 @@ size_t find_mux_num_datapath_inputs(const CircuitLibrary& circuit_lib,
    * LUTs do have an tree-like MUX, but there is no need for a constant input! 
    */
   VTR_ASSERT ((CIRCUIT_MODEL_MUX == circuit_lib.model_type(circuit_model)) 
-           || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) );
+           || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model))
+           || (CIRCUIT_MDOEL_MUX_NON_CONFIG == circuit_lib.model_type(circuit_model)) );
 
   if (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) {
     return mux_size;
@@ -63,8 +64,10 @@ size_t find_mux_implementation_num_inputs(const CircuitLibrary& circuit_lib,
   /* Should be either MUX or LUT
    * LUTs do have an tree-like MUX, but there is no need for a constant input! 
    */
+  /* shen: add CIRCUIT_MODEL_MUX_NON_CONFIG */
   VTR_ASSERT ((CIRCUIT_MODEL_MUX == circuit_lib.model_type(circuit_model)) 
-           || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) );
+           || (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model))
+           || (CIRCUIT_MDOEL_MUX_NON_CONFIG == circuit_lib.model_type(circuit_model)) );
 
   if (CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model)) {
     return mux_size;

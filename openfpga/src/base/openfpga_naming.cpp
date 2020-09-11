@@ -93,6 +93,9 @@ std::string generate_mux_subckt_name(const CircuitLibrary& circuit_lib,
   if (CIRCUIT_MODEL_MUX == circuit_lib.model_type(circuit_model)) {
     module_name += "_size";
     module_name += std::to_string(mux_size);
+  } else if (CIRCUIT_MDOEL_MUX_NON_CONFIG == circuit_lib.model_type(circuit_model)) {
+    module_name += "_non_config_size";
+    module_name += std::to_string(mux_size);
   } else {  
     VTR_ASSERT(CIRCUIT_MODEL_LUT == circuit_lib.model_type(circuit_model));
     module_name += "_mux";

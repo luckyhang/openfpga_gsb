@@ -267,7 +267,9 @@ enum PORTS circuit_port_require_pb_port_type(const e_circuit_model_port_type& ci
   type_mapping[CIRCUIT_MODEL_PORT_OUTPUT] = OUT_PORT;
   type_mapping[CIRCUIT_MODEL_PORT_INOUT] = INOUT_PORT;
   type_mapping[CIRCUIT_MODEL_PORT_CLOCK] = IN_PORT;
-
+  /* shen: add circuit port type sram mapping to input */
+  type_mapping[CIRCUIT_MODEL_PORT_SRAM] = IN_PORT;
+  /*  */
   /* Other circuit model ports should not be found when mapping to the pb_type ports */
   if (type_mapping.end() == type_mapping.find(circuit_port_type)) {
     return ERR_PORT;

@@ -25,7 +25,8 @@ int build_device_module_graph(ModuleManager& module_manager,
                               const bool& duplicate_grid_pin,
                               const FabricKey& fabric_key,
                               const bool& generate_random_fabric_key,
-                              const bool& verbose);
+                              const bool& verbose,
+                              const bool& enabling_gsb_routing = false);
 
 } /* end namespace openfpga */
 

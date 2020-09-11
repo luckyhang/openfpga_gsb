@@ -21,7 +21,8 @@ float find_physical_tile_pin_Fc(t_physical_tile_type_ptr type,
                                 const int& pin);
 
 std::set<e_side> find_physical_io_tile_located_sides(const DeviceGrid& grids,
-                                                     t_physical_tile_type_ptr physical_tile);
+                                                     t_physical_tile_type_ptr physical_tile,
+                                                     const bool& enable_gsb_routing = false);
 
 } /* end namespace openfpga */
 

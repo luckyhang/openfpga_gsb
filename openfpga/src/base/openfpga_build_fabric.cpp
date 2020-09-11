@@ -74,11 +74,16 @@ int build_fabric(OpenfpgaContext& openfpga_ctx,
   CommandOptionId opt_write_fabric_key = cmd.option("write_fabric_key");
   CommandOptionId opt_load_fabric_key = cmd.option("load_fabric_key");
   CommandOptionId opt_verbose = cmd.option("verbose");
+  /* shen: option enable_gsb_routing */
+  CommandOptionId opt_enable_gsb_routing = cmd.option("enable_gsb_routing");
   
-  if (true == cmd_context.option_enable(cmd, opt_compress_routing)) {
+  /* shen: for now, dont need compress_routing, because the num of unique modules is almost the same as total modules when gsb routing is enabled */
+  if (false == cmd_context.option_enable(cmd, opt_enable_gsb_routing)) {
+    if (true == cmd_context.option_enable(cmd, opt_compress_routing)) {
     compress_routing_hierarchy(openfpga_ctx, cmd_context.option_enable(cmd, opt_verbose));
     /* Update flow manager to enable compress routing */
     openfpga_ctx.mutable_flow_manager().set_compress_routing(true);
+    }
   }
 
   VTR_LOG("\n");
@@ -109,7 +114,8 @@ int build_fabric(OpenfpgaContext& openfpga_ctx,
                                           cmd_context.option_enable(cmd, opt_duplicate_grid_pin),
                                           predefined_fabric_key,
                                           cmd_context.option_enable(cmd, opt_gen_random_fabric_key),
-                                          cmd_context.option_enable(cmd, opt_verbose));
+                                          cmd_context.option_enable(cmd, opt_verbose),
+                                          cmd_context.option_enable(cmd, opt_enable_gsb_routing));
 
   /* If there is any error, final status cannot be overwritten by a success flag */
   if (CMD_EXEC_SUCCESS != curr_status) {

@@ -1136,7 +1136,8 @@ void build_grid_modules(ModuleManager& module_manager,
                         const e_config_protocol_type& sram_orgz_type,
                         const CircuitModelId& sram_model,
                         const bool& duplicate_grid_pin,
-                        const bool& verbose) {
+                        const bool& verbose,
+                        const bool& enable_gsb_routing) {
   /* Start time count */
   vtr::ScopedStartFinishTimer timer("Build grid modules");
 
@@ -1183,7 +1184,8 @@ void build_grid_modules(ModuleManager& module_manager,
        *   we will generate one module with NUM_SIDES (same treatment as regular grids) 
        */
       std::set<e_side> io_type_sides = find_physical_io_tile_located_sides(device_ctx.grid,
-                                                                           &physical_tile);
+                                                                           &physical_tile,
+                                                                           enable_gsb_routing);
       for (const e_side& io_type_side : io_type_sides) {
         build_physical_tile_module(module_manager, decoder_lib,
                                    circuit_lib,

@@ -26,7 +26,8 @@ void build_grid_modules(ModuleManager& module_manager,
                         const e_config_protocol_type& sram_orgz_type,
                         const CircuitModelId& sram_model,
                         const bool& duplicate_grid_pin,
-                        const bool& verbose);
+                        const bool& verbose,
+                        const bool& enable_gsb_routing = false);
 
 } /* end namespace openfpga */
 

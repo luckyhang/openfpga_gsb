@@ -315,8 +315,10 @@ bool CircuitLibrary::mux_add_const_input(const CircuitModelId& model_id) const {
   /* validate the model_id */
   VTR_ASSERT(valid_model_id(model_id));
   /* validate the circuit model type is MUX */
+  /* shen: add CIRCUIT_MODEL_MUX_NON_CONFIG */
   VTR_ASSERT( (CIRCUIT_MODEL_MUX == model_type(model_id))
-           || (CIRCUIT_MODEL_LUT == model_type(model_id)) );
+           || (CIRCUIT_MODEL_LUT == model_type(model_id)) 
+           || (CIRCUIT_MDOEL_MUX_NON_CONFIG == model_type(model_id)));
   /* A -1 value for the const values means there is no const inputs */
   return ( size_t(-1) != mux_const_input_values_[model_id] );
 }
@@ -343,8 +345,10 @@ bool CircuitLibrary::mux_use_local_encoder(const CircuitModelId& model_id) const
   /* validate the model_id */
   VTR_ASSERT(valid_model_id(model_id));
   /* validate the circuit model type is MUX */
+  /* shen: add CIRCUIT_MODEL_MUX_NON_CONFIG */
   VTR_ASSERT( (CIRCUIT_MODEL_MUX == model_type(model_id))
-           || (CIRCUIT_MODEL_LUT == model_type(model_id)) );
+           || (CIRCUIT_MODEL_LUT == model_type(model_id)) 
+           || (CIRCUIT_MDOEL_MUX_NON_CONFIG == model_type(model_id)));
   return mux_use_local_encoder_[model_id];
 }
 

@@ -24,6 +24,8 @@ enum e_circuit_model_type {
   CIRCUIT_MODEL_CHAN_WIRE, 
   CIRCUIT_MODEL_WIRE, 
   CIRCUIT_MODEL_MUX, 
+  /* shen: mux whose sel port is not connected to sram but other ports */
+  CIRCUIT_MDOEL_MUX_NON_CONFIG,
   CIRCUIT_MODEL_LUT, 
   CIRCUIT_MODEL_FF, 
   CIRCUIT_MODEL_SRAM, 
@@ -36,7 +38,7 @@ enum e_circuit_model_type {
   NUM_CIRCUIT_MODEL_TYPES
 };
 /* Strings correspond to each port type */
-constexpr std::array<const char*, NUM_CIRCUIT_MODEL_TYPES> CIRCUIT_MODEL_TYPE_STRING = {{"chan_wire", "wire", "mux", "lut", "ff", "sram", "hard_logic", "ccff", "iopad", "inv_buf", "pass_gate", "gate"}};
+constexpr std::array<const char*, NUM_CIRCUIT_MODEL_TYPES> CIRCUIT_MODEL_TYPE_STRING = {{"chan_wire", "wire", "mux", "mux_non_config", "lut", "ff", "sram", "hard_logic", "ccff", "iopad", "inv_buf", "pass_gate", "gate"}};
 
 enum e_circuit_model_design_tech {
   CIRCUIT_MODEL_DESIGN_CMOS, 

@@ -1,7 +1,9 @@
-vpr ../openfpga_flow/vpr_arch/k6_frac_N10_mem32K_40nm_gsb10.xml ../openfpga_flow/benchmarks/micro_benchmark/and2/and2.blif --read_rr_graph ../../../project/OpenFPGA/rrg_40.xml --route_chan_width 158 --device fixed_layout
+vpr ../openfpga_flow/vpr_arch/k6_frac_N10_mem32K_40nm_gsb10.xml ../openfpga_flow/benchmarks/micro_benchmark/and2/and2.blif --read_rr_graph ../../../projects/openfpga_gsb/rrg_40.xml --route_chan_width 158 --device fixed_layout
 
-read_openfpga_arch -f /home/syh/project/OpenFPGA/openfpga_flow/openfpga_arch/k6_frac_N10_mem32K_40nm_gsb10_openfpga.xml
+read_openfpga_arch -f /home/syh/projects/openfpga_gsb/openfpga_flow/openfpga_arch/k6_frac_N10_mem32K_40nm_gsb10_openfpga.xml
 
-read_openfpga_simulation_setting -f /home/syh/project/OpenFPGA/openfpga_flow/openfpga_simulation_settings/auto_sim_openfpga.xml
+read_openfpga_simulation_setting -f /home/syh/projects/openfpga_gsb/openfpga_flow/openfpga_simulation_settings/auto_sim_openfpga.xml
 
-link_openfpga_arch --activity_file /home/syh/project/OpenFPGA/openfpga_flow/benchmarks/micro_benchmark/and2/and2.act  --sort_gsb_chan_node_in_edges
+link_openfpga_arch --activity_file /home/syh/projects/openfpga_gsb/openfpga_flow/benchmarks/micro_benchmark/and2/and2.act  --sort_gsb_chan_node_in_edges --enable_gsb_routing
+
+build_fabric --enable_gsb_routing --duplicate_grid_pin

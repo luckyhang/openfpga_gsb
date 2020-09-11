@@ -39,7 +39,8 @@ int build_device_module_graph(ModuleManager& module_manager,
                               const bool& duplicate_grid_pin,
                               const FabricKey& fabric_key,
                               const bool& generate_random_fabric_key,
-                              const bool& verbose) {
+                              const bool& verbose,
+                              const bool& enable_gsb_routing) {
   vtr::ScopedStartFinishTimer timer("Build fabric module graph");
 
   int status = CMD_EXEC_SUCCESS;
@@ -87,7 +88,8 @@ int build_device_module_graph(ModuleManager& module_manager,
                      openfpga_ctx.arch().circuit_lib,
                      openfpga_ctx.mux_lib(),
                      openfpga_ctx.arch().config_protocol.type(),
-                     sram_model, duplicate_grid_pin, verbose);
+                     sram_model, duplicate_grid_pin, verbose,
+                     enable_gsb_routing);
 
   if (true == compress_routing) {
     build_unique_routing_modules(module_manager,
@@ -107,7 +109,8 @@ int build_device_module_graph(ModuleManager& module_manager,
                                   openfpga_ctx.device_rr_gsb(),
                                   openfpga_ctx.arch().circuit_lib,
                                   openfpga_ctx.arch().config_protocol.type(),
-                                  sram_model, verbose);
+                                  sram_model, verbose,
+                                  enable_gsb_routing);
   }
 
   /* Build FPGA fabric top-level module */

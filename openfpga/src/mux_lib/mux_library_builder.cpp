@@ -57,7 +57,7 @@ void build_routing_arch_mux_library(const DeviceContext& vpr_device_ctx,
         VTR_LOG_ERROR("Unable to find the circuit mode for rr_switch '%s'!\n",
                       vpr_device_ctx.rr_graph.get_switch(driver_switches[0]).name);
         vpr_device_ctx.rr_graph.print_node(node);
-        exit(1);
+        //exit(1);
       }
      
       VTR_ASSERT(CircuitModelId::INVALID() != rr_switch_circuit_model);
@@ -191,6 +191,26 @@ void build_lut_mux_library(MuxLibrary& mux_lib,
   }
 }
 
+/* shen: */
+static
+void build_mux_non_config_library(MuxLibrary& mux_lib,const CircuitLibrary& circuit_lib) {
+  for (const auto& circuit_model : circuit_lib.models()) {
+    if (CIRCUIT_MDOEL_MUX_NON_CONFIG != circuit_lib.model_type(circuit_model)) {
+      continue;
+    }
+    std::vector<CircuitPortId> input_ports = circuit_lib.model_ports_by_type(circuit_model, CIRCUIT_MODEL_PORT_INPUT);
+    /* note that input real mux input size need to substrate 1 input sram */
+    /* this code assumes the input sram port is last placed, which must require openfpga arch circuit port sram is placed in the last  */
+    size_t mux_size = 0;
+    for (const auto& port_id : input_ports) {
+      if (port_id == *(input_ports.cend()-1)) break;
+      mux_size += circuit_lib.port_size(port_id);
+    }
+    mux_lib.add_mux(circuit_lib, circuit_model, mux_size);
+  }
+
+}
+
 /* Statistic for all the multiplexers in FPGA
  * We determine the sizes and its structure (according to spice_model) for each type of multiplexers
  * We search multiplexers in Switch Blocks, Connection blocks and Configurable Logic Blocks
@@ -198,7 +218,8 @@ void build_lut_mux_library(MuxLibrary& mux_lib,
  * All the statistics are stored in a linked list, as a return value
  */
 MuxLibrary build_device_mux_library(const DeviceContext& vpr_device_ctx,
-                                    const OpenfpgaContext& openfpga_ctx) {
+                                    const OpenfpgaContext& openfpga_ctx,
+                                    const bool& enable_non_config_mux) {
   vtr::ScopedStartFinishTimer timer("Build a library of physical multiplexers");
 
   /* MuxLibrary to store the information of Multiplexers*/
@@ -223,6 +244,12 @@ MuxLibrary build_device_mux_library(const DeviceContext& vpr_device_ctx,
 
   /* Step 3: count the size of multiplexer that will be used in LUTs*/
   build_lut_mux_library(mux_lib, openfpga_ctx.arch().circuit_lib); 
+
+  /* shen: Step 4: build the muxes whose sram port is connected to other ports instead of a real SRAM module */
+  if (enable_non_config_mux) {
+    build_mux_non_config_library(mux_lib, openfpga_ctx.arch().circuit_lib);
+  }
+  
 
   VTR_LOG("Built a multiplexer library of %lu physical multiplexers.\n",
           mux_lib.muxes().size());
